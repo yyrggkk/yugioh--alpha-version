@@ -1,5 +1,5 @@
 // =========================================
-// 2. GAME STATE & RULES ENGINE
+// 1. GAME STATE & UTILS
 // =========================================
 let gameState = {
     normalSummonUsed: false,
@@ -10,15 +10,20 @@ let gameState = {
 };
 
 let selectedFieldCard = null;
+let selectedHandCard = null; // Added to ensure hand selection works
 let battleState = { isAttacking: false, attackerCard: null };
 let spellState = { isTargeting: false, sourceCard: null, targetType: null };
-// TRIBUTE STATE
 let tributeState = { isActive: false, pendingCard: null, requiredTributes: 0, currentTributes: [], actionType: null };
 let activeTurnBuffs = []; 
 
-// Utility: Generate unique ID
+// Generate unique ID
 function generateUID() {
     return 'card-' + Date.now() + '-' + Math.floor(Math.random() * 100000);
+}
+
+// Helper: Determine who owns a card (Player or Opponent)
+function getOwner(card) {
+    return card.closest('.player-zone') ? 'player' : 'opponent';
 }
 
 // --- Helper Function: Send Card to Graveyard ---
@@ -77,7 +82,7 @@ function updateGYVisual(elementId, imgUrl) {
 }
 
 // =========================================
-// SPELL & EFFECT LOGIC
+// 2. SPELL & EFFECT LOGIC
 // =========================================
 
 function modifyStats(card, atkMod, defMod) {
@@ -97,19 +102,33 @@ function modifyStats(card, atkMod, defMod) {
     }
 }
 
+// REFACTORED CARD EFFECTS
 const cardEffects = {
     'Pot of Greed': function(card) {
-        log("Effect: Draw 2 Cards!");
-        drawCard(); setTimeout(drawCard, 500);
+        const owner = getOwner(card);
+        log(`${owner === 'player' ? 'You' : 'Opponent'} activates Pot of Greed!`);
+        if (owner === 'player') {
+            drawCard(); setTimeout(drawCard, 500);
+        } else {
+            drawOpponentCard(); setTimeout(drawOpponentCard, 500);
+        }
         return true; 
     },
     'Raigeki': function(card) {
-        log("Effect: Destroy all opponent monsters!");
-        const oppMonsterZones = document.querySelectorAll('.opp-zone.monster-zone .card');
+        const owner = getOwner(card);
+        const victim = (owner === 'player') ? 'opponent' : 'player';
+        
+        log(`Effect: Destroy all ${victim} monsters!`);
+        
+        const targetZone = (victim === 'player') ? '.player-zone' : '.opp-zone';
+        const targets = document.querySelectorAll(`${targetZone}.monster-zone .card`);
+        
         let destroyedCount = 0;
-        oppMonsterZones.forEach(c => {
-            c.style.transition = 'all 0.5s'; c.style.transform = 'scale(0) rotate(360deg)'; c.style.opacity = '0';
-            setTimeout(() => { sendToGraveyard(c, 'opponent'); }, 500);
+        targets.forEach(c => {
+            c.style.transition = 'all 0.5s'; 
+            c.style.transform = 'scale(0) rotate(360deg)'; 
+            c.style.opacity = '0';
+            setTimeout(() => { sendToGraveyard(c, victim); }, 500);
             destroyedCount++;
         });
         if(destroyedCount === 0) log("Effect: No monsters to destroy.");
@@ -135,8 +154,35 @@ const cardEffects = {
         spellState.isTargeting = true; spellState.sourceCard = card; spellState.targetType = 'monster';
         highlightTargets('monster'); return false;
     },
-    'Banner of Courage': function(card) { log("Banner of Courage activated!"); return false; },
-    'Burning Land': function(card) { log("Burning Land activated!"); return false; }
+    'Banner of Courage': {
+        type: 'Continuous',
+        apply: function(card, currentPhase, activePlayer) {
+            const owner = getOwner(card);
+            // Effect: +200 ATK during YOUR Battle Phase only
+            if (currentPhase === 'BP' && activePlayer === owner) {
+                const selector = owner === 'player' ? '.player-zone.monster-zone .card' : '.opp-zone.monster-zone .card';
+                document.querySelectorAll(selector).forEach(m => {
+                    if (!m.hasAttribute('data-buff-banner')) {
+                        modifyStats(m, 200, 0);
+                        m.setAttribute('data-buff-banner', 'true');
+                    }
+                });
+            } else {
+                // Remove buff if phase changes or turn ends
+                const selector = owner === 'player' ? '.player-zone.monster-zone .card' : '.opp-zone.monster-zone .card';
+                document.querySelectorAll(selector).forEach(m => {
+                    if (m.hasAttribute('data-buff-banner')) {
+                        modifyStats(m, -200, 0);
+                        m.removeAttribute('data-buff-banner');
+                    }
+                });
+            }
+        }
+    },
+    'Burning Land': {
+        type: 'Continuous',
+        apply: function(card) { /* Handled in Standby Phase trigger */ }
+    }
 };
 
 function resolveSpellTarget(target) {
@@ -159,13 +205,15 @@ function resolveSpellTarget(target) {
         modifyStats(target, 700, 0);
         log(`${target.getAttribute('data-name')} gains 700 ATK!`);
         activeTurnBuffs.push({ uid: target.getAttribute('data-uid'), atkMod: 700, defMod: 0 });
-        setTimeout(() => sendToGraveyard(source, source.closest('.player-zone') ? 'player' : 'opponent'), 500);
+        const spellOwner = getOwner(source);
+        setTimeout(() => sendToGraveyard(source, spellOwner), 500);
     }
     else if (effectName === 'Mystical Space Typhoon') {
         log(`${target.getAttribute('data-name')} destroyed!`);
-        const owner = target.closest('.opp-zone') ? 'opponent' : 'player';
-        sendToGraveyard(target, owner);
-        setTimeout(() => sendToGraveyard(source, source.closest('.player-zone') ? 'player' : 'opponent'), 500);
+        const targetOwner = getOwner(target);
+        const spellOwner = getOwner(source);
+        sendToGraveyard(target, targetOwner);
+        setTimeout(() => sendToGraveyard(source, spellOwner), 500);
     }
 }
 
@@ -180,7 +228,7 @@ function highlightTargets(type) {
 function clearHighlights() { document.querySelectorAll('.zone').forEach(el => el.classList.remove('targetable')); }
 
 // =========================================
-// COUNTERS & LP
+// 3. COUNTERS & LP
 // =========================================
 function updateCounters() {
     document.getElementById('player-deck-count').textContent = playerDeckData.length;
@@ -212,7 +260,7 @@ function endDuel(msg) {
 }
 
 // =========================================
-// 3. GAME LOOP & PHASES
+// 4. GAME LOOP & PHASES
 // =========================================
 let currentPhase = 'DP';
 let isPlayerTurn = true;
@@ -220,7 +268,6 @@ let turnCount = 1;
 const phaseOrder = ['DP', 'SP', 'MP1', 'BP', 'MP2', 'EP'];
 
 window.onload = function() {
-    // INIT: Add UIDs to existing cards
     document.querySelectorAll('.card').forEach(c => {
         if(!c.hasAttribute('data-uid')) c.setAttribute('data-uid', generateUID());
         if(!c.hasAttribute('data-original-atk')) {
@@ -228,7 +275,6 @@ window.onload = function() {
             c.setAttribute('data-original-def', c.getAttribute('data-def'));
         }
     });
-
     updateCounters();
     log("Duel Started");
     startDuelSequence();
@@ -236,7 +282,7 @@ window.onload = function() {
 
 function startDuelSequence() {
     log("Turn 1: Draw Phase");
-    let drawsLeft = 4; 
+    let drawsLeft = 4; // Standard Speed Duel Hand Size
     let interval = setInterval(() => {
         if(drawsLeft > 0) { drawCard(); drawOpponentCard(); drawsLeft--; }
         else { clearInterval(interval); proceedToMainPhase(); }
@@ -254,6 +300,8 @@ function runNormalTurn() {
 function proceedToMainPhase() {
     setTimeout(() => {
         setPhaseText('SP', "STANDBY PHASE"); log("Standby Phase");
+        
+        // Handle Standby Phase Effects like Burning Land
         const spells = document.querySelectorAll('.spell-trap-zone .card.face-up');
         spells.forEach(s => {
             if(s.getAttribute('data-name') === 'Burning Land') {
@@ -262,40 +310,20 @@ function proceedToMainPhase() {
                 s.style.boxShadow = "0 0 20px #ff5533"; setTimeout(() => s.style.boxShadow = "", 500);
             }
         });
-        setTimeout(() => { setPhaseText('MP1', "MAIN PHASE 1"); log("Main Phase 1"); currentPhase = 'MP1'; }, 1500);
+
+        setTimeout(() => { 
+            setPhaseText('MP1', "MAIN PHASE 1"); 
+            log("Main Phase 1"); 
+            currentPhase = 'MP1';
+            updateContinuousEffects(); // Initial check
+        }, 1500);
     }, 1500);
-}
-
-function placeOpponentCard(cardData, type, state, specificZone = null) {
-    let targetZone = specificZone;
-    if (!targetZone) {
-        const selector = type === 'monster' ? '.opp-zone.monster-zone' : '.opp-zone.spell-trap-zone';
-        const zones = document.querySelectorAll(selector);
-        for (let z of zones) { if (z.children.length === 0) { targetZone = z; break; } }
-    }
-    if (!targetZone) return null;
-    const newCard = document.createElement('div');
-    newCard.className = `card ${state}`;
-    newCard.style.backgroundImage = `url('${cardData.img}')`;
-    newCard.setAttribute('data-uid', generateUID());
-    newCard.setAttribute('data-name', cardData.name);
-    newCard.setAttribute('data-atk', cardData.atk); newCard.setAttribute('data-def', cardData.def);
-    newCard.setAttribute('data-original-atk', cardData.atk); newCard.setAttribute('data-original-def', cardData.def);
-    newCard.setAttribute('data-card-category', cardData.category); newCard.setAttribute('data-type', cardData.full_type);
-    newCard.setAttribute('data-level', cardData.level); newCard.setAttribute('data-attribute', cardData.attribute);
-    newCard.setAttribute('data-race', cardData.race); newCard.setAttribute('data-img', cardData.img);
-    newCard.setAttribute('data-desc', cardData.desc);
-
-    if (type === 'monster') { newCard.innerHTML = `<div class="stats-bar"><span class="stat-val stat-atk">${cardData.atk}</span><span class="stat-val stat-def">${cardData.def}</span></div>`; }
-    targetZone.appendChild(newCard);
-    const handCards = document.querySelectorAll('.opponent-hand-card');
-    if(handCards.length > 0) handCards[0].remove();
-    return newCard;
 }
 
 function switchTurn() {
     if(gameState.gameOver) return;
     
+    // Clear Temp Buffs
     if(activeTurnBuffs.length > 0) {
         log("End Phase: Resetting temporary boosts.");
         activeTurnBuffs.forEach(buff => {
@@ -312,6 +340,9 @@ function switchTurn() {
     cancelBattleMode();
     spellState.isTargeting = false; clearHighlights();
     cancelTributeMode(); 
+    
+    // Update Continuous Effects for phase change
+    updateContinuousEffects();
 
     if(isPlayerTurn) {
         turnCount++;
@@ -332,23 +363,69 @@ function switchTurn() {
                         updateLP(500, 'player'); updateLP(500, 'opponent');
                     }
                 });
-                // --- CHANGED SECTION START ---
+                
                 setTimeout(() => { 
                     setPhaseText('MP1', "MAIN PHASE 1"); 
                     currentPhase = 'MP1'; 
-                    // REMOVED: runOpponentAI(); 
-                    
-                    // ADDED: Auto-pass turn back to player after 1 second
+                    updateContinuousEffects();
+
+                    // NO AI: Simply pass turn back to player for Hotseat/Testing
                     log("Opponent ends turn.");
                     setTimeout(switchTurn, 1000); 
                 }, 1000);
-                // --- CHANGED SECTION END ---
             }, 1000);
         }, 500);
     }
 }
 
-// ... [DRAW/RENDER HAND FUNCTIONS REMAIN SAME AS BEFORE] ...
+// GENERIC CONTINUOUS EFFECT UPDATER
+function updateContinuousEffects() {
+    const activeSpells = document.querySelectorAll('.spell-trap-zone .card.face-up');
+    const activePlayer = isPlayerTurn ? 'player' : 'opponent';
+
+    activeSpells.forEach(card => {
+        const name = card.getAttribute('data-name');
+        if (cardEffects[name] && cardEffects[name].type === 'Continuous') {
+            cardEffects[name].apply(card, currentPhase, activePlayer);
+        }
+    });
+}
+
+function setPhase(phase) {
+    const currIdx = phaseOrder.indexOf(currentPhase);
+    const targetIdx = phaseOrder.indexOf(phase);
+    
+    if (targetIdx <= currIdx && turnCount > 1) return;
+    if (currentPhase === 'MP1' && phase === 'MP2') return;
+    if (turnCount === 1 && (phase === 'BP' || phase === 'MP2')) { log("Cannot conduct Battle Phase on the first turn."); return; }
+
+    // Logic: Leave old phase
+    if (currentPhase === 'BP' && phase !== 'BP') {
+        // Force cleanup of Banner if leaving BP
+        updateContinuousEffects(); 
+    }
+
+    currentPhase = phase;
+    phaseBtn.textContent = phase;
+    let text = "MAIN PHASE 1";
+    if(phase === 'BP') text = "BATTLE PHASE"; 
+    if(phase === 'MP2') text = "MAIN PHASE 2"; 
+    if(phase === 'EP') text = "END PHASE";
+    phaseText.textContent = text;
+    phaseMenu.classList.remove('active');
+    log(`Phase: ${text}`);
+
+    if (phase !== 'BP') cancelBattleMode();
+
+    // Logic: Enter new phase
+    updateContinuousEffects();
+
+    if(phase === 'EP') setTimeout(switchTurn, 1000);
+}
+
+function setPhaseText(short, long) { currentPhase = short; phaseBtn.textContent = short; phaseText.textContent = long; }
+
+// --- DRAW LOGIC ---
 function drawCard() {
     if(gameState.gameOver) return;
     if (playerDeckData.length > 0) {
@@ -391,7 +468,7 @@ function renderHandCard(card) {
 }
 
 // =========================================
-// 4. UI INTERACTIONS & ACTIVATION
+// 5. ACTIONS & INTERACTIONS
 // =========================================
 
 // --- TRIBUTE LOGIC ---
@@ -401,21 +478,17 @@ function initiateTribute(card, required, action) {
     tributeState.requiredTributes = required;
     tributeState.currentTributes = [];
     tributeState.actionType = action;
-
     log(`Tribute Summon: Select ${required} monster(s) to tribute.`);
-    // Highlight Player Monsters
     document.querySelectorAll('.player-zone.monster-zone .card').forEach(c => c.parentElement.classList.add('targetable'));
 }
 
 function handleTributeSelection(target) {
     if (tributeState.currentTributes.includes(target)) return;
-
     tributeState.currentTributes.push(target);
-    target.style.opacity = '0.5'; // Visual feedback
+    target.style.opacity = '0.5'; 
     log(`Selected tribute: ${target.getAttribute('data-name')} (${tributeState.currentTributes.length}/${tributeState.requiredTributes})`);
 
     if (tributeState.currentTributes.length >= tributeState.requiredTributes) {
-        // Execute Tribute
         tributeState.currentTributes.forEach(t => sendToGraveyard(t, 'player'));
         executeCardPlay(tributeState.pendingCard, tributeState.actionType);
         cancelTributeMode();
@@ -441,7 +514,6 @@ function performAction(action) {
     const isMonsterSummon = (action === 'summon') || (action === 'set' && selectedHandCard.getAttribute('data-card-category') === 'monster');
     if (isMonsterSummon && gameState.normalSummonUsed) { alert("Already used Normal Summon/Set this turn!"); actionMenu.classList.remove('active'); return; }
 
-    // --- TRIBUTE CHECK ---
     if (isMonsterSummon) {
         const level = parseInt(selectedHandCard.getAttribute('data-level'));
         let tributesNeeded = 0;
@@ -459,8 +531,6 @@ function performAction(action) {
             return; 
         }
     }
-
-    // Normal Play
     executeCardPlay(selectedHandCard, action);
 }
 
@@ -517,7 +587,15 @@ function executeCardPlay(handCardEl, action) {
 
     if (action === 'activate') {
         let finished = true;
-        if(cardEffects[cardData.name]) { finished = cardEffects[cardData.name](newCard); } 
+        // Check generic registry first
+        if(cardEffects[cardData.name] && typeof cardEffects[cardData.name] === 'function') { 
+            finished = cardEffects[cardData.name](newCard); 
+        } 
+        else if (cardEffects[cardData.name] && cardEffects[cardData.name].type === 'Continuous') {
+            log(`Activated Continuous Spell: ${cardData.name}`);
+            finished = false; // Stay on field
+            updateContinuousEffects();
+        }
         else { log(`Activated: ${cardData.name}`); }
         
         const typeStr = cardData.type || "";
@@ -563,7 +641,7 @@ document.body.addEventListener('click', function(e) {
         if (!e.target.closest('.action-menu')) { spellState.isTargeting = false; spellState.sourceCard = null; clearHighlights(); log("Spell activation cancelled."); }
     }
 
-    // 3. BATTLE
+    // 3. BATTLE TARGETING
     if (battleState.isAttacking && battleState.attackerCard) {
         const targetMonster = e.target.closest('.opp-zone.monster-zone .card');
         if (targetMonster) { resolveAttack(battleState.attackerCard, targetMonster); e.stopPropagation(); return; }
@@ -644,7 +722,8 @@ function activateSetCard() {
     log(`Activated Set Card: ${cardName}`);
 
     let finished = true;
-    if(cardEffects[cardName]) { finished = cardEffects[cardName](selectedFieldCard); }
+    if(cardEffects[cardName] && typeof cardEffects[cardName] === 'function') { finished = cardEffects[cardName](selectedFieldCard); }
+    else if(cardEffects[cardName] && cardEffects[cardName].type === 'Continuous') { finished = false; updateContinuousEffects(); }
 
     const typeStr = selectedFieldCard.getAttribute('data-type') || "";
     const raceStr = selectedFieldCard.getAttribute('data-race') || "";
@@ -657,7 +736,104 @@ function activateSetCard() {
     actionMenu.classList.remove('active');
 }
 
-// ... [PHASE AND SIDEBAR FUNCTIONS REMAIN SAME AS BEFORE] ...
+// =========================================
+// 6. BATTLE LOGIC
+// =========================================
+
+function initiateAttack() {
+    if (currentPhase !== 'BP') { alert("Attacks can only be declared in the Battle Phase!"); actionMenu.classList.remove('active'); return; }
+    if (!selectedFieldCard) return;
+    if (selectedFieldCard.getAttribute('data-attacked') === 'true') { alert("This monster has already attacked!"); actionMenu.classList.remove('active'); return; }
+
+    battleState.isAttacking = true;
+    battleState.attackerCard = selectedFieldCard;
+    log(`Battle: ${selectedFieldCard.getAttribute('data-name')} is attacking... Select a target.`);
+    
+    const oppMonsters = document.querySelectorAll('.opp-zone.monster-zone .card');
+    if (oppMonsters.length > 0) { oppMonsters.forEach(el => el.parentElement.classList.add('targetable')); } 
+    else { document.getElementById('oppAvatarContainer').classList.add('targetable'); }
+    actionMenu.classList.remove('active');
+}
+
+function resolveAttack(attacker, target) {
+    const attackerName = attacker.getAttribute('data-name');
+    const targetName = target.getAttribute('data-name');
+    const atkVal = parseInt(attacker.getAttribute('data-atk'));
+    let targetAtk = parseInt(target.getAttribute('data-atk'));
+    let targetDef = parseInt(target.getAttribute('data-def'));
+    const isTargetFaceDown = target.classList.contains('face-down');
+    const isTargetDef = target.classList.contains('pos-def');
+
+    log(`${attackerName} attacks ${targetName || 'Face-Down Card'}!`);
+
+    if (isTargetFaceDown) {
+        log("Opponent monster flipped face-up!");
+        target.classList.remove('face-down'); target.classList.add('face-up');
+        target.style.backgroundImage = `url('${target.getAttribute('data-img')}')`;
+        if(!target.querySelector('.stats-bar')) {
+            target.innerHTML = `<div class="stats-bar"><span class="stat-val stat-atk">${targetAtk}</span><span class="stat-val stat-def">${targetDef}</span></div>`;
+        }
+    }
+
+    const destroyCard = (card, owner) => {
+        card.style.transition = 'all 0.5s ease-in';
+        card.style.transform = 'scale(0) rotate(360deg)';
+        card.style.opacity = '0';
+        setTimeout(() => { sendToGraveyard(card, owner); }, 500);
+    };
+
+    if (!isTargetDef) {
+        if (atkVal > targetAtk) {
+            const diff = atkVal - targetAtk;
+            log(`Victory! ${targetName} destroyed. Opponent takes ${diff} damage.`);
+            updateLP(diff, 'opponent');
+            destroyCard(target, 'opponent');
+        } else if (atkVal < targetAtk) {
+            const diff = targetAtk - atkVal;
+            log(`Defeat! ${attackerName} destroyed. You take ${diff} damage.`);
+            updateLP(diff, 'player');
+            destroyCard(attacker, 'player');
+        } else {
+            log("Double KO! Both monsters destroyed.");
+            destroyCard(target, 'opponent'); destroyCard(attacker, 'player');
+        }
+    } else {
+        if (atkVal > targetDef) {
+            log(`Defense pierced! ${targetName} destroyed.`);
+            destroyCard(target, 'opponent');
+        } else if (atkVal < targetDef) {
+            const diff = targetDef - atkVal;
+            log(`Blocked! You take ${diff} damage.`);
+            updateLP(diff, 'player');
+        } else { log("Stalemate. No monsters destroyed."); }
+    }
+
+    if (document.body.contains(attacker)) { attacker.setAttribute('data-attacked', 'true'); }
+    cancelBattleMode();
+}
+
+function performDirectAttack(attacker) {
+    const oppMonsters = document.querySelectorAll('.opp-zone.monster-zone .card');
+    if (oppMonsters.length > 0) { alert("Cannot attack directly! Opponent controls monsters."); return; }
+    const atk = parseInt(attacker.getAttribute('data-atk'));
+    log(`${attacker.getAttribute('data-name')} attacks directly!`);
+    attacker.style.transform = 'translateY(-50px) scale(1.2)';
+    setTimeout(() => { attacker.style.transform = ''; }, 300);
+    updateLP(atk, 'opponent');
+    attacker.setAttribute('data-attacked', 'true');
+    cancelBattleMode();
+}
+
+function cancelBattleMode() {
+    battleState.isAttacking = false;
+    battleState.attackerCard = null;
+    document.querySelectorAll('.opp-zone.monster-zone').forEach(el => el.classList.remove('targetable'));
+    document.getElementById('oppAvatarContainer').classList.remove('targetable');
+}
+
+// =========================================
+// 7. UI HELPERS
+// =========================================
 const phaseMenu = document.getElementById('phaseMenu');
 const phaseBtn = document.getElementById('phaseBtn');
 const phaseText = document.getElementById('phaseText');
@@ -678,57 +854,12 @@ function updatePhaseMenuState() {
     });
 }
 
-function setPhase(phase) {
-    const currIdx = phaseOrder.indexOf(currentPhase);
-    const targetIdx = phaseOrder.indexOf(phase);
-    if (targetIdx <= currIdx) return;
-    if (currentPhase === 'MP1' && phase === 'MP2') return;
-    if (turnCount === 1 && (phase === 'BP' || phase === 'MP2')) { log("Cannot conduct Battle Phase on the first turn."); return; }
-
-    if (currentPhase === 'BP' && phase !== 'BP') {
-        const spells = document.querySelectorAll('.spell-trap-zone .card.face-up');
-        spells.forEach(s => {
-            if(s.getAttribute('data-name') === 'Banner of Courage') {
-                const monsters = document.querySelectorAll('.player-zone.monster-zone .card');
-                monsters.forEach(m => modifyStats(m, -200, 0));
-                log("Banner of Courage: ATK boost removed.");
-            }
-        });
-    }
-
-    currentPhase = phase;
-    phaseBtn.textContent = phase;
-    let text = "MAIN PHASE 1";
-    if(phase === 'BP') text = "BATTLE PHASE"; if(phase === 'MP2') text = "MAIN PHASE 2"; if(phase === 'EP') text = "END PHASE";
-    phaseText.textContent = text;
-    phaseMenu.classList.remove('active');
-    log(`Phase: ${text}`);
-
-    if (phase !== 'BP') cancelBattleMode();
-
-    if (phase === 'BP') {
-        const spells = document.querySelectorAll('.spell-trap-zone .card.face-up');
-        spells.forEach(s => {
-            if(s.getAttribute('data-name') === 'Banner of Courage') {
-                const monsters = document.querySelectorAll('.player-zone.monster-zone .card');
-                monsters.forEach(m => modifyStats(m, 200, 0));
-                log("Banner of Courage: Player monsters gain 200 ATK!");
-            }
-        });
-    }
-
-    if(phase === 'EP') setTimeout(switchTurn, 1000);
-}
-
-function setPhaseText(short, long) { currentPhase = short; phaseBtn.textContent = short; phaseText.textContent = long; }
-
 function showMenu(rect) {
     let menuTop = rect.top - 50; if(menuTop < 0) menuTop = 20;
     actionMenu.style.left = `${rect.left + 20}px`; actionMenu.style.top = `${menuTop}px`;
     actionMenu.classList.add('active');
 }
-// ... [REST OF UTILS (changeBattlePosition, flipSummon, listModal) REMAIN SAME] ...
-// (Add them back if copying full file, they are unchanged from previous working versions)
+
 function changeBattlePosition() {
     if (!selectedFieldCard) return;
     if (currentPhase !== 'MP1' && currentPhase !== 'MP2') { alert("Action only allowed in Main Phase!"); actionMenu.classList.remove('active'); return; }
@@ -771,122 +902,8 @@ function flipSummon() {
     log(`Flip Summoned: ${selectedFieldCard.getAttribute('data-name')}`);
     actionMenu.classList.remove('active');
 }
-function initiateAttack() {
-    if (currentPhase !== 'BP') { 
-        alert("Attacks can only be declared in the Battle Phase!"); 
-        actionMenu.classList.remove('active'); 
-        return; 
-    }
-    if (!selectedFieldCard) return;
 
-    // Check if monster already attacked this turn
-    if (selectedFieldCard.getAttribute('data-attacked') === 'true') {
-        alert("This monster has already attacked!");
-        actionMenu.classList.remove('active');
-        return;
-    }
-
-    battleState.isAttacking = true;
-    battleState.attackerCard = selectedFieldCard;
-    
-    log(`Battle: ${selectedFieldCard.getAttribute('data-name')} is attacking... Select a target.`);
-    
-    // Highlight Valid Targets
-    const oppMonsters = document.querySelectorAll('.opp-zone.monster-zone .card');
-    
-    if (oppMonsters.length > 0) {
-        // If opponent has monsters, you must attack them
-        oppMonsters.forEach(el => el.parentElement.classList.add('targetable'));
-    } else {
-        // If opponent has NO monsters, you can attack directly (highlight the avatar/profile)
-        document.getElementById('oppAvatarContainer').classList.add('targetable');
-    }
-    
-    actionMenu.classList.remove('active');
-}
-function resolveAttack(attacker, target) {
-    const attackerName = attacker.getAttribute('data-name');
-    const targetName = target.getAttribute('data-name');
-    const atkVal = parseInt(attacker.getAttribute('data-atk'));
-    let targetAtk = parseInt(target.getAttribute('data-atk'));
-    let targetDef = parseInt(target.getAttribute('data-def'));
-    const isTargetFaceDown = target.classList.contains('face-down');
-    const isTargetDef = target.classList.contains('pos-def');
-
-    log(`${attackerName} attacks ${targetName || 'Face-Down Card'}!`);
-
-    // Reveal face-down card properly before damage calc
-    if (isTargetFaceDown) {
-        log("Opponent monster flipped face-up!");
-        target.classList.remove('face-down'); target.classList.add('face-up');
-        target.style.backgroundImage = `url('${target.getAttribute('data-img')}')`;
-        if(!target.querySelector('.stats-bar')) {
-            target.innerHTML = `<div class="stats-bar"><span class="stat-val stat-atk">${targetAtk}</span><span class="stat-val stat-def">${targetDef}</span></div>`;
-        }
-    }
-
-    // Helper for destruction animation
-    const destroyCard = (card, owner) => {
-        card.style.transition = 'all 0.5s ease-in';
-        card.style.transform = 'scale(0) rotate(360deg)';
-        card.style.opacity = '0';
-        setTimeout(() => { sendToGraveyard(card, owner); }, 500);
-    };
-
-    if (!isTargetDef) {
-        // Attack Position Battle
-        if (atkVal > targetAtk) {
-            const diff = atkVal - targetAtk;
-            log(`Victory! ${targetName} destroyed. Opponent takes ${diff} damage.`);
-            updateLP(diff, 'opponent');
-            destroyCard(target, 'opponent'); // ANIMATED DESTRUCTION
-        } else if (atkVal < targetAtk) {
-            const diff = targetAtk - atkVal;
-            log(`Defeat! ${attackerName} destroyed. You take ${diff} damage.`);
-            updateLP(diff, 'player');
-            destroyCard(attacker, 'player'); // ANIMATED DESTRUCTION
-        } else {
-            log("Double KO! Both monsters destroyed.");
-            destroyCard(target, 'opponent');
-            destroyCard(attacker, 'player');
-        }
-    } else {
-        // Defense Position Battle
-        if (atkVal > targetDef) {
-            log(`Defense pierced! ${targetName} destroyed.`);
-            destroyCard(target, 'opponent'); // ANIMATED DESTRUCTION
-        } else if (atkVal < targetDef) {
-            const diff = targetDef - atkVal;
-            log(`Blocked! You take ${diff} damage.`);
-            updateLP(diff, 'player');
-        } else { 
-            log("Stalemate. No monsters destroyed."); 
-        }
-    }
-
-    if (document.body.contains(attacker)) { attacker.setAttribute('data-attacked', 'true'); }
-    cancelBattleMode();
-}
-
-function cancelBattleMode() {
-    battleState.isAttacking = false;
-    battleState.attackerCard = null;
-    document.querySelectorAll('.opp-zone.monster-zone').forEach(el => el.classList.remove('targetable'));
-    document.getElementById('oppAvatarContainer').classList.remove('targetable');
-}
-
-function performDirectAttack(attacker) {
-    const oppMonsters = document.querySelectorAll('.opp-zone.monster-zone .card');
-    if (oppMonsters.length > 0) { alert("Cannot attack directly! Opponent controls monsters."); return; }
-    const atk = parseInt(attacker.getAttribute('data-atk'));
-    log(`${attacker.getAttribute('data-name')} attacks directly!`);
-    attacker.style.transform = 'translateY(-50px) scale(1.2)';
-    setTimeout(() => { attacker.style.transform = ''; }, 300);
-    updateLP(atk, 'opponent');
-    attacker.setAttribute('data-attacked', 'true');
-    cancelBattleMode();
-}
-
+// Modal Logic
 const listModal = document.getElementById('listModal');
 const listGrid = document.getElementById('listGrid');
 const listTitle = document.getElementById('listTitle');
@@ -908,12 +925,7 @@ document.getElementById('playerGY').addEventListener('click', () => openList('Yo
 document.getElementById('oppGY').addEventListener('click', () => openList('Opponent Graveyard', oppGYData));
 document.getElementById('playerEx').addEventListener('click', () => openList('Extra Deck', playerExData));
 
-const btn = document.getElementById('chainBtn');
-const statesList = ['AUTO', 'ON', 'OFF'];
-let idx = 0;
-function toggleChain() { idx = (idx + 1) % 3; btn.className = `chain-btn state-${statesList[idx].toLowerCase()}`; btn.textContent = statesList[idx]; }
-
-// ... [SIDEBAR UPDATE FUNCTION REMAIN SAME] ...
+// Sidebar Updates
 let detailImg = document.getElementById('detailImg');
 let detailName = document.getElementById('detailName');
 let detailType = document.getElementById('detailType');
@@ -936,19 +948,16 @@ function updateSidebar(el) {
     if (level > 0) {
         detailLevel.textContent = '★'.repeat(level);
         detailLevel.style.display = 'inline';
-    } else {
-        detailLevel.style.display = 'none';
-    }
+    } else { detailLevel.style.display = 'none'; }
 
     const attr = el.getAttribute('data-attribute');
     if (attr && attr !== 'undefined' && attr !== '') {
         detailAttrIcon.textContent = attr.substring(0, 1); 
         detailAttrIcon.className = `attr-icon attr-${attr}`;
         detailAttrIcon.style.display = 'inline-block';
-    } else {
-        detailAttrIcon.style.display = 'none';
-    }
+    } else { detailAttrIcon.style.display = 'none'; }
 }
+
 function log(msg) {
     const entry = document.createElement('div'); entry.className = 'log-entry';
     entry.innerHTML = `<span>System:</span> ${msg}`;
