@@ -3,61 +3,159 @@
 // 1. DATA CONFIGURATION
 // ==========================================
 
-// Raw Data from your source (simulating a DB or API response)
+// Raw Data from YGOPRODeck API
 $rawDB = [
+    // --- ORIGINAL 4 CARDS ---
     'raigeki' => [
-        "id" => 12580477, "name" => "Raigeki", "type" => "Spell Card", 
-        "humanReadableCardType" => "Normal Spell", "frameType" => "spell", 
-        "desc" => "Destroy all monsters your opponent controls.", 
-        "race" => "Normal", 
+        "id" => 12580477, "name" => "Raigeki", "type" => "Spell Card", "humanReadableCardType" => "Normal Spell", "frameType" => "spell", 
+        "desc" => "Destroy all monsters your opponent controls.", "race" => "Normal", 
         "image_url" => "https://images.ygoprodeck.com/images/cards/12580477.jpg"
     ],
     'blueeyes' => [
-        "id" => 89631139, "name" => "Blue-Eyes White Dragon", 
-        "typeline" => ["Dragon","Normal"], "type" => "Normal Monster", 
-        "humanReadableCardType" => "Normal Monster", "frameType" => "normal", 
-        "desc" => "This legendary dragon is a powerful engine of destruction. Virtually invincible, very few have faced this awesome creature and lived to tell the tale.", 
-        "race" => "Dragon", "atk" => 3000, "def" => 2500, "level" => 8, "attribute" => "LIGHT", 
-        "archetype" => "Blue-Eyes", 
+        "id" => 89631139, "name" => "Blue-Eyes White Dragon", "typeline" => ["Dragon","Normal"], "type" => "Normal Monster", "humanReadableCardType" => "Normal Monster", "frameType" => "normal", 
+        "desc" => "This legendary dragon is a powerful engine of destruction.", "race" => "Dragon", "atk" => 3000, "def" => 2500, "level" => 8, "attribute" => "LIGHT", 
         "image_url" => "https://images.ygoprodeck.com/images/cards/89631139.jpg"
     ],
     'darkmagician' => [
-        "id" => 46986414, "name" => "Dark Magician", 
-        "typeline" => ["Spellcaster","Normal"], "type" => "Normal Monster", 
-        "humanReadableCardType" => "Normal Monster", "frameType" => "normal", 
-        "desc" => "''The ultimate wizard in terms of attack and defense.''", 
-        "race" => "Spellcaster", "atk" => 2500, "def" => 2100, "level" => 7, "attribute" => "DARK", 
-        "archetype" => "Dark Magician", 
+        "id" => 46986414, "name" => "Dark Magician", "typeline" => ["Spellcaster","Normal"], "type" => "Normal Monster", "humanReadableCardType" => "Normal Monster", "frameType" => "normal", 
+        "desc" => "The ultimate wizard in terms of attack and defense.", "race" => "Spellcaster", "atk" => 2500, "def" => 2100, "level" => 7, "attribute" => "DARK", 
         "image_url" => "https://images.ygoprodeck.com/images/cards/46986414.jpg"
     ],
     'pot' => [
-        "id" => 55144522, "name" => "Pot of Greed", "type" => "Spell Card", 
-        "humanReadableCardType" => "Normal Spell", "frameType" => "spell", 
+        "id" => 55144522, "name" => "Pot of Greed", "type" => "Spell Card", "humanReadableCardType" => "Normal Spell", "frameType" => "spell", 
         "desc" => "Draw 2 cards.", "race" => "Normal", 
-        "archetype" => "Greed", 
         "image_url" => "https://images.ygoprodeck.com/images/cards/55144522.jpg"
-    ]
+    ],
+
+    // --- NEW MONSTERS (Normal) ---
+    
+    // Level 6 (1x)
+    'summonedskull' => [
+        "id" => 70781052, "name" => "Summoned Skull", "typeline" => ["Fiend","Normal"], "type" => "Normal Monster", "humanReadableCardType" => "Normal Monster", "frameType" => "normal", 
+        "desc" => "A fiend with dark powers for confusing the enemy. Among the Fiend-Type monsters, this monster boasts considerable force.", 
+        "race" => "Fiend", "atk" => 2500, "def" => 1200, "level" => 6, "attribute" => "DARK", 
+        "image_url" => "https://images.ygoprodeck.com/images/cards/70781052.jpg"
+    ],
+
+    // Level 5 (1x)
+    'curseofdragon' => [
+        "id" => 28279543, "name" => "Curse of Dragon", "typeline" => ["Dragon","Normal"], "type" => "Normal Monster", "humanReadableCardType" => "Normal Monster", "frameType" => "normal", 
+        "desc" => "A wicked dragon that taps into dark forces to execute a powerful flame attack.", 
+        "race" => "Dragon", "atk" => 2000, "def" => 1500, "level" => 5, "attribute" => "DARK", 
+        "image_url" => "https://images.ygoprodeck.com/images/cards/28279543.jpg"
+    ],
+
+    // Level 4 (3x)
+    'geminielf' => [
+        "id" => 69140098, "name" => "Gemini Elf", "typeline" => ["Spellcaster","Normal"], "type" => "Normal Monster", "humanReadableCardType" => "Normal Monster", "frameType" => "normal", 
+        "desc" => "Elf twins that alternate their attacks.", 
+        "race" => "Spellcaster", "atk" => 1900, "def" => 900, "level" => 4, "attribute" => "EARTH", 
+        "image_url" => "https://images.ygoprodeck.com/images/cards/69140098.jpg"
+    ],
+    'celticguardian' => [
+        "id" => 91152256, "name" => "Celtic Guardian", "typeline" => ["Warrior","Normal"], "type" => "Normal Monster", "humanReadableCardType" => "Normal Monster", "frameType" => "normal", 
+        "desc" => "An elf who learned to wield a sword, he baffles enemies with lightning-fast attacks.", 
+        "race" => "Warrior", "atk" => 1400, "def" => 1200, "level" => 4, "attribute" => "EARTH", 
+        "image_url" => "https://images.ygoprodeck.com/images/cards/91152256.jpg"
+    ],
+    'mysticalelf' => [
+        "id" => 15025844, "name" => "Mystical Elf", "typeline" => ["Spellcaster","Normal"], "type" => "Normal Monster", "humanReadableCardType" => "Normal Monster", "frameType" => "normal", 
+        "desc" => "A delicate elf that lacks offense, but has a terrific defense backed by mystical power.", 
+        "race" => "Spellcaster", "atk" => 800, "def" => 2000, "level" => 4, "attribute" => "LIGHT", 
+        "image_url" => "https://images.ygoprodeck.com/images/cards/15025844.jpg"
+    ],
+
+    // Level 3 (3x)
+    'silverfang' => [
+        "id" => 90357090, "name" => "Silver Fang", "typeline" => ["Beast","Normal"], "type" => "Normal Monster", "humanReadableCardType" => "Normal Monster", "frameType" => "normal", 
+        "desc" => "A snow wolf that's beautiful to the eye, but absolutely vicious in battle.", 
+        "race" => "Beast", "atk" => 1200, "def" => 800, "level" => 3, "attribute" => "EARTH", 
+        "image_url" => "https://images.ygoprodeck.com/images/cards/90357090.jpg"
+    ],
+    'mammothgraveyard' => [
+        "id" => 40374923, "name" => "Mammoth Graveyard", "typeline" => ["Dinosaur","Normal"], "type" => "Normal Monster", "humanReadableCardType" => "Normal Monster", "frameType" => "normal", 
+        "desc" => "A mammoth that protects the graves of its pack and is absolutely merciless when facing grave-robbers.", 
+        "race" => "Dinosaur", "atk" => 1200, "def" => 800, "level" => 3, "attribute" => "EARTH", 
+        "image_url" => "https://images.ygoprodeck.com/images/cards/40374923.jpg"
+    ],
+    'beaverwarrior' => [
+        "id" => 32452818, "name" => "Beaver Warrior", "typeline" => ["Beast-Warrior","Normal"], "type" => "Normal Monster", "humanReadableCardType" => "Normal Monster", "frameType" => "normal", 
+        "desc" => "What this creature lacks in size it makes up for in defense when battling in the prairie.", 
+        "race" => "Beast-Warrior", "atk" => 1200, "def" => 1500, "level" => 3, "attribute" => "EARTH", 
+        "image_url" => "https://images.ygoprodeck.com/images/cards/32452818.jpg"
+    ],
+
+    // Level 2 (1x)
+    'basicinsect' => [
+        "id" => 89091560, "name" => "Basic Insect", "typeline" => ["Insect","Normal"], "type" => "Normal Monster", "humanReadableCardType" => "Normal Monster", "frameType" => "normal", 
+        "desc" => "Usually found traveling in swarms, this creature's ideal environment is the forest.", 
+        "race" => "Insect", "atk" => 500, "def" => 700, "level" => 2, "attribute" => "EARTH", 
+        "image_url" => "https://images.ygoprodeck.com/images/cards/89091579.jpg"
+    ],
+
+    // Level 1 (1x)
+    'petitangel' => [
+        "id" => 38142739, "name" => "Petit Angel", "typeline" => ["Fairy","Normal"], "type" => "Normal Monster", "humanReadableCardType" => "Normal Monster", "frameType" => "normal", 
+        "desc" => "A quick-moving and tiny fairy that's very difficult to hit.", 
+        "race" => "Fairy", "atk" => 600, "def" => 900, "level" => 1, "attribute" => "LIGHT", 
+        "image_url" => "https://images.ygoprodeck.com/images/cards/38142739.jpg"
+    ],
+
+    // --- NEW SPELLS ---
+
+    // Equip Spells (2x)
+    'axeofdespair' => [
+        "id" => 40619825, "name" => "Axe of Despair", "type" => "Spell Card", "humanReadableCardType" => "Equip Spell", "frameType" => "spell", 
+        "desc" => "The equipped monster gains 1000 ATK.", "race" => "Equip", 
+        "image_url" => "https://images.ygoprodeck.com/images/cards/40619825.jpg"
+    ],
+    'malevolentnuzzler' => [
+        "id" => 99597615, "name" => "Malevolent Nuzzler", "type" => "Spell Card", "humanReadableCardType" => "Equip Spell", "frameType" => "spell", 
+        "desc" => "The equipped monster gains 700 ATK.", "race" => "Equip", 
+        "image_url" => "https://images.ygoprodeck.com/images/cards/99597615.jpg"
+    ],
+
+    // Quick-Play Spells (2x)
+    'mst' => [
+        "id" => 5318639, "name" => "Mystical Space Typhoon", "type" => "Spell Card", "humanReadableCardType" => "Quick-Play Spell", "frameType" => "spell", 
+        "desc" => "Target 1 Spell/Trap on the field; destroy that target.", "race" => "Quick-Play", 
+        "image_url" => "https://images.ygoprodeck.com/images/cards/5318639.jpg"
+    ],
+    'rushrecklessly' => [
+        "id" => 70046172, "name" => "Rush Recklessly", "type" => "Spell Card", "humanReadableCardType" => "Quick-Play Spell", "frameType" => "spell", 
+        "desc" => "Target 1 face-up monster on the field; it gains 700 ATK until the end of this turn.", "race" => "Quick-Play", 
+        "image_url" => "https://images.ygoprodeck.com/images/cards/70046172.jpg"
+    ],
+
+    // Continuous Spells (2x)
+    'bannerofcourage' => [
+        "id" => 10012614, "name" => "Banner of Courage", "type" => "Spell Card", "humanReadableCardType" => "Continuous Spell", "frameType" => "spell", 
+        "desc" => "All monsters you control gain 200 ATK during your Battle Phase only.", "race" => "Continuous", 
+        "image_url" => "https://images.ygoprodeck.com/images/cards/10012614.jpg"
+    ],
+    'burningland' => [
+        "id" => 24294108, "name" => "Burning Land", "type" => "Spell Card", "humanReadableCardType" => "Continuous Spell", "frameType" => "spell", 
+        "desc" => "During each player's Standby Phase: The turn player takes 500 damage.", "race" => "Continuous", 
+        "image_url" => "https://images.ygoprodeck.com/images/cards/24294108.jpg"
+    ],
 ];
 
 // Pre-processing to normalize data for the Game Engine
 $cardDB = [];
 foreach ($rawDB as $key => $card) {
-    // 1. Determine Category (Monster vs Spell/Trap) based on frameType
     $category = 'monster';
     if (in_array($card['frameType'], ['spell', 'trap'])) {
         $category = 'spell';
     }
 
-    // 2. Map fields to ensure engine compatibility
     $cardDB[$key] = array_merge($card, [
         'category' => $category,
-        'img'      => $card['image_url'], // Map image_url to img
-        'atk'      => isset($card['atk']) ? $card['atk'] : 0, // Default 0 for spells
+        'img'      => $card['image_url'],
+        'atk'      => isset($card['atk']) ? $card['atk'] : 0,
         'def'      => isset($card['def']) ? $card['def'] : 0,
         'level'    => isset($card['level']) ? $card['level'] : 0,
         'attribute'=> isset($card['attribute']) ? $card['attribute'] : '',
         'race'     => isset($card['race']) ? $card['race'] : '',
-        // Format Type string like "Dragon / Normal"
         'full_type'=> isset($card['typeline']) ? implode(' / ', $card['typeline']) : $card['humanReadableCardType']
     ]);
 }
@@ -75,9 +173,9 @@ function buildRandomDeck($db, $count) {
     return $deck;
 }
 
-// Initial Decks
-$playerDeck = buildRandomDeck($cardDB, 15);
-$oppDeck    = buildRandomDeck($cardDB, 15);
+// Build Decks with 20 cards now
+$playerDeck = buildRandomDeck($cardDB, 20);
+$oppDeck    = buildRandomDeck($cardDB, 20);
 
 // Initial Field State
 $playerMonsters = [0 => null, 1 => null, 2 => null];
@@ -85,13 +183,13 @@ $playerSpells   = [0 => null, 1 => null, 2 => null];
 $playerGY       = [];
 $playerExDeck   = [];
 
-// Opponent Field - Testing Setup
+// Opponent Field - Testing Setup (Giving them some strong classic monsters)
 $oppMonsters = [
     0 => $cardDB['blueeyes'],
-    1 => $cardDB['darkmagician'],
+    1 => $cardDB['summonedskull'],
     2 => null
 ];
-$oppSpells = [0 => null, 1 => null, 2 => null];
+$oppSpells = [0 => null, 1 => $cardDB['bannerofcourage'], 2 => null];
 $oppGY = [];
 $oppExDeck = [];
 
