@@ -5,31 +5,22 @@
 
 // Raw Data from YGOPRODeck API
 $rawDB = [
-    // --- ORIGINAL 4 CARDS ---
-    'raigeki' => [
-        "id" => 12580477, "name" => "Raigeki", "type" => "Spell Card", "humanReadableCardType" => "Normal Spell", "frameType" => "spell", 
-        "desc" => "Destroy all monsters your opponent controls.", "race" => "Normal", 
-        "image_url" => "https://images.ygoprodeck.com/images/cards/12580477.jpg"
-    ],
+    // Monsters
+    // Level 8
     'blueeyes' => [
         "id" => 89631139, "name" => "Blue-Eyes White Dragon", "typeline" => ["Dragon","Normal"], "type" => "Normal Monster", "humanReadableCardType" => "Normal Monster", "frameType" => "normal", 
         "desc" => "This legendary dragon is a powerful engine of destruction.", "race" => "Dragon", "atk" => 3000, "def" => 2500, "level" => 8, "attribute" => "LIGHT", 
         "image_url" => "https://images.ygoprodeck.com/images/cards/89631139.jpg"
     ],
+    
+    // Level 7
     'darkmagician' => [
         "id" => 46986414, "name" => "Dark Magician", "typeline" => ["Spellcaster","Normal"], "type" => "Normal Monster", "humanReadableCardType" => "Normal Monster", "frameType" => "normal", 
         "desc" => "The ultimate wizard in terms of attack and defense.", "race" => "Spellcaster", "atk" => 2500, "def" => 2100, "level" => 7, "attribute" => "DARK", 
         "image_url" => "https://images.ygoprodeck.com/images/cards/46986414.jpg"
     ],
-    'pot' => [
-        "id" => 55144522, "name" => "Pot of Greed", "type" => "Spell Card", "humanReadableCardType" => "Normal Spell", "frameType" => "spell", 
-        "desc" => "Draw 2 cards.", "race" => "Normal", 
-        "image_url" => "https://images.ygoprodeck.com/images/cards/55144522.jpg"
-    ],
 
-    // --- NEW MONSTERS (Normal) ---
-    
-    // Level 6 (1x)
+    // Level 6
     'summonedskull' => [
         "id" => 70781052, "name" => "Summoned Skull", "typeline" => ["Fiend","Normal"], "type" => "Normal Monster", "humanReadableCardType" => "Normal Monster", "frameType" => "normal", 
         "desc" => "A fiend with dark powers for confusing the enemy. Among the Fiend-Type monsters, this monster boasts considerable force.", 
@@ -37,7 +28,7 @@ $rawDB = [
         "image_url" => "https://images.ygoprodeck.com/images/cards/70781052.jpg"
     ],
 
-    // Level 5 (1x)
+    // Level 5
     'curseofdragon' => [
         "id" => 28279543, "name" => "Curse of Dragon", "typeline" => ["Dragon","Normal"], "type" => "Normal Monster", "humanReadableCardType" => "Normal Monster", "frameType" => "normal", 
         "desc" => "A wicked dragon that taps into dark forces to execute a powerful flame attack.", 
@@ -45,7 +36,7 @@ $rawDB = [
         "image_url" => "https://images.ygoprodeck.com/images/cards/28279543.jpg"
     ],
 
-    // Level 4 (3x)
+    // Level 4
     'geminielf' => [
         "id" => 69140098, "name" => "Gemini Elf", "typeline" => ["Spellcaster","Normal"], "type" => "Normal Monster", "humanReadableCardType" => "Normal Monster", "frameType" => "normal", 
         "desc" => "Elf twins that alternate their attacks.", 
@@ -65,7 +56,7 @@ $rawDB = [
         "image_url" => "https://images.ygoprodeck.com/images/cards/15025844.jpg"
     ],
 
-    // Level 3 (3x)
+    // Level 3
     'silverfang' => [
         "id" => 90357090, "name" => "Silver Fang", "typeline" => ["Beast","Normal"], "type" => "Normal Monster", "humanReadableCardType" => "Normal Monster", "frameType" => "normal", 
         "desc" => "A snow wolf that's beautiful to the eye, but absolutely vicious in battle.", 
@@ -85,7 +76,7 @@ $rawDB = [
         "image_url" => "https://images.ygoprodeck.com/images/cards/32452818.jpg"
     ],
 
-    // Level 2 (1x)
+    // Level 2
     'basicinsect' => [
         "id" => 89091560, "name" => "Basic Insect", "typeline" => ["Insect","Normal"], "type" => "Normal Monster", "humanReadableCardType" => "Normal Monster", "frameType" => "normal", 
         "desc" => "Usually found traveling in swarms, this creature's ideal environment is the forest.", 
@@ -93,17 +84,42 @@ $rawDB = [
         "image_url" => "https://images.ygoprodeck.com/images/cards/89091579.jpg"
     ],
 
-    // Level 1 (1x)
+    // Level 1
     'petitangel' => [
         "id" => 38142739, "name" => "Petit Angel", "typeline" => ["Fairy","Normal"], "type" => "Normal Monster", "humanReadableCardType" => "Normal Monster", "frameType" => "normal", 
         "desc" => "A quick-moving and tiny fairy that's very difficult to hit.", 
         "race" => "Fairy", "atk" => 600, "def" => 900, "level" => 1, "attribute" => "LIGHT", 
         "image_url" => "https://images.ygoprodeck.com/images/cards/38142739.jpg"
     ],
-
-    // --- NEW SPELLS ---
-
-    // Equip Spells (2x)
+    //spells
+    // Normal spells
+    'raigeki' => [
+        "id" => 12580477, "name" => "Raigeki", "type" => "Spell Card", "humanReadableCardType" => "Normal Spell", "frameType" => "spell", 
+        "desc" => "Destroy all monsters your opponent controls.", "race" => "Normal", 
+        "image_url" => "https://images.ygoprodeck.com/images/cards/12580477.jpg"
+    ],
+    'pot' => [
+        "id" => 55144522, "name" => "Pot of Greed", "type" => "Spell Card", "humanReadableCardType" => "Normal Spell", "frameType" => "spell", 
+        "desc" => "Draw 2 cards.", "race" => "Normal", 
+        "image_url" => "https://images.ygoprodeck.com/images/cards/55144522.jpg"
+    ],
+    'monsterreborn' => [
+        "id" => 83764718, "name" => "Monster Reborn", "type" => "Spell Card", "humanReadableCardType" => "Normal Spell", "frameType" => "spell", 
+        "desc" => "Target 1 monster in either GY; Special Summon it.", "race" => "Normal", 
+        "image_url" => "https://images.ygoprodeck.com/images/cards/83764718.jpg"
+    ],
+    'dianketo' => [
+        "id" => 84257639, "name" => "Dian Keto the Cure Master", "type" => "Spell Card", "humanReadableCardType" => "Normal Spell", "frameType" => "spell", 
+        "desc" => "Increase your Life Points by 1000 points.", "race" => "Normal", 
+        "image_url" => "https://images.ygoprodeck.com/images/cards/84257639.jpg"
+    ],
+    'ookazi' => [
+        "id" => 19523799, "name" => "Ookazi", "type" => "Spell Card", "humanReadableCardType" => "Normal Spell", "frameType" => "spell", 
+        "desc" => "Inflict 800 damage to your opponent.", "race" => "Normal", 
+        "image_url" => "https://images.ygoprodeck.com/images/cards/19523799.jpg"
+    ],
+    
+    // Equip Spells
     'axeofdespair' => [
         "id" => 40619825, "name" => "Axe of Despair", "type" => "Spell Card", "humanReadableCardType" => "Equip Spell", "frameType" => "spell", 
         "desc" => "The equipped monster gains 1000 ATK.", "race" => "Equip", 
@@ -115,7 +131,7 @@ $rawDB = [
         "image_url" => "https://images.ygoprodeck.com/images/cards/99597615.jpg"
     ],
 
-    // Quick-Play Spells (2x)
+    // Quick-Play Spells
     'mst' => [
         "id" => 5318639, "name" => "Mystical Space Typhoon", "type" => "Spell Card", "humanReadableCardType" => "Quick-Play Spell", "frameType" => "spell", 
         "desc" => "Target 1 Spell/Trap on the field; destroy that target.", "race" => "Quick-Play", 
@@ -127,7 +143,7 @@ $rawDB = [
         "image_url" => "https://images.ygoprodeck.com/images/cards/70046172.jpg"
     ],
 
-    // Continuous Spells (2x)
+    // Continuous Spells
     'bannerofcourage' => [
         "id" => 10012614, "name" => "Banner of Courage", "type" => "Spell Card", "humanReadableCardType" => "Continuous Spell", "frameType" => "spell", 
         "desc" => "All monsters you control gain 200 ATK during your Battle Phase only.", "race" => "Continuous", 
@@ -151,9 +167,9 @@ foreach ($rawDB as $key => $card) {
     $cardDB[$key] = array_merge($card, [
         'category' => $category,
         'img'      => $card['image_url'],
-        'atk'      => isset($card['atk']) ? $card['atk'] : 0,
-        'def'      => isset($card['def']) ? $card['def'] : 0,
-        'level'    => isset($card['level']) ? $card['level'] : 0,
+        'atk'      => isset($card['atk']) ? $card['atk'] : '',
+        'def'      => isset($card['def']) ? $card['def'] : '',
+        'level'    => isset($card['level']) ? $card['level'] : '',
         'attribute'=> isset($card['attribute']) ? $card['attribute'] : '',
         'race'     => isset($card['race']) ? $card['race'] : '',
         'full_type'=> isset($card['typeline']) ? implode(' / ', $card['typeline']) : $card['humanReadableCardType']
@@ -174,7 +190,26 @@ function buildRandomDeck($db, $count) {
 }
 
 // Build Decks with 20 cards now
-$playerDeck = buildRandomDeck($cardDB, 20);
+$playerDeck = [
+    $cardDB['geminielf'],
+    $cardDB['geminielf'],
+    $cardDB['geminielf'],
+    $cardDB['raigeki'],
+    $cardDB['dianketo'],
+    $cardDB['ookazi'],
+    $cardDB['mst'],
+    $cardDB['mst'],
+    $cardDB['rushrecklessly'],
+    $cardDB['bannerofcourage'],
+    $cardDB['burningland'],
+    $cardDB['axeofdespair'],
+    $cardDB['malevolentnuzzler'],
+    $cardDB['mst'],
+    $cardDB['pot'],
+    $cardDB['geminielf'],
+    $cardDB['geminielf'],
+    $cardDB['monsterreborn'],
+];
 $oppDeck    = buildRandomDeck($cardDB, 20);
 
 // Initial Field State
