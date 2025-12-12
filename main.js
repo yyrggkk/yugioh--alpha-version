@@ -332,7 +332,17 @@ function switchTurn() {
                         updateLP(500, 'player'); updateLP(500, 'opponent');
                     }
                 });
-                setTimeout(() => { setPhaseText('MP1', "MAIN PHASE 1"); currentPhase = 'MP1'; runOpponentAI(); }, 1000);
+                // --- CHANGED SECTION START ---
+                setTimeout(() => { 
+                    setPhaseText('MP1', "MAIN PHASE 1"); 
+                    currentPhase = 'MP1'; 
+                    // REMOVED: runOpponentAI(); 
+                    
+                    // ADDED: Auto-pass turn back to player after 1 second
+                    log("Opponent ends turn.");
+                    setTimeout(switchTurn, 1000); 
+                }, 1000);
+                // --- CHANGED SECTION END ---
             }, 1000);
         }, 500);
     }
@@ -761,7 +771,39 @@ function flipSummon() {
     log(`Flip Summoned: ${selectedFieldCard.getAttribute('data-name')}`);
     actionMenu.classList.remove('active');
 }
+function initiateAttack() {
+    if (currentPhase !== 'BP') { 
+        alert("Attacks can only be declared in the Battle Phase!"); 
+        actionMenu.classList.remove('active'); 
+        return; 
+    }
+    if (!selectedFieldCard) return;
 
+    // Check if monster already attacked this turn
+    if (selectedFieldCard.getAttribute('data-attacked') === 'true') {
+        alert("This monster has already attacked!");
+        actionMenu.classList.remove('active');
+        return;
+    }
+
+    battleState.isAttacking = true;
+    battleState.attackerCard = selectedFieldCard;
+    
+    log(`Battle: ${selectedFieldCard.getAttribute('data-name')} is attacking... Select a target.`);
+    
+    // Highlight Valid Targets
+    const oppMonsters = document.querySelectorAll('.opp-zone.monster-zone .card');
+    
+    if (oppMonsters.length > 0) {
+        // If opponent has monsters, you must attack them
+        oppMonsters.forEach(el => el.parentElement.classList.add('targetable'));
+    } else {
+        // If opponent has NO monsters, you can attack directly (highlight the avatar/profile)
+        document.getElementById('oppAvatarContainer').classList.add('targetable');
+    }
+    
+    actionMenu.classList.remove('active');
+}
 function resolveAttack(attacker, target) {
     const attackerName = attacker.getAttribute('data-name');
     const targetName = target.getAttribute('data-name');
