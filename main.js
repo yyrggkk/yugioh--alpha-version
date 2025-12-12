@@ -815,6 +815,7 @@ function resolveAttack(attacker, target) {
 
     log(`${attackerName} attacks ${targetName || 'Face-Down Card'}!`);
 
+    // Reveal face-down card properly before damage calc
     if (isTargetFaceDown) {
         log("Opponent monster flipped face-up!");
         target.classList.remove('face-down'); target.classList.add('face-up');
@@ -824,29 +825,45 @@ function resolveAttack(attacker, target) {
         }
     }
 
+    // Helper for destruction animation
+    const destroyCard = (card, owner) => {
+        card.style.transition = 'all 0.5s ease-in';
+        card.style.transform = 'scale(0) rotate(360deg)';
+        card.style.opacity = '0';
+        setTimeout(() => { sendToGraveyard(card, owner); }, 500);
+    };
+
     if (!isTargetDef) {
+        // Attack Position Battle
         if (atkVal > targetAtk) {
             const diff = atkVal - targetAtk;
             log(`Victory! ${targetName} destroyed. Opponent takes ${diff} damage.`);
-            sendToGraveyard(target, 'opponent'); updateLP(diff, 'opponent');
+            updateLP(diff, 'opponent');
+            destroyCard(target, 'opponent'); // ANIMATED DESTRUCTION
         } else if (atkVal < targetAtk) {
             const diff = targetAtk - atkVal;
             log(`Defeat! ${attackerName} destroyed. You take ${diff} damage.`);
-            sendToGraveyard(attacker, 'player'); updateLP(diff, 'player');
+            updateLP(diff, 'player');
+            destroyCard(attacker, 'player'); // ANIMATED DESTRUCTION
         } else {
             log("Double KO! Both monsters destroyed.");
-            sendToGraveyard(target, 'opponent'); sendToGraveyard(attacker, 'player');
+            destroyCard(target, 'opponent');
+            destroyCard(attacker, 'player');
         }
     } else {
+        // Defense Position Battle
         if (atkVal > targetDef) {
             log(`Defense pierced! ${targetName} destroyed.`);
-            sendToGraveyard(target, 'opponent');
+            destroyCard(target, 'opponent'); // ANIMATED DESTRUCTION
         } else if (atkVal < targetDef) {
             const diff = targetDef - atkVal;
             log(`Blocked! You take ${diff} damage.`);
             updateLP(diff, 'player');
-        } else { log("Stalemate. No monsters destroyed."); }
+        } else { 
+            log("Stalemate. No monsters destroyed."); 
+        }
     }
+
     if (document.body.contains(attacker)) { attacker.setAttribute('data-attacked', 'true'); }
     cancelBattleMode();
 }
