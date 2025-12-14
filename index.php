@@ -25,19 +25,25 @@
         .sidebar-left { position: absolute; left: 20px; top: 50%; transform: translateY(-55%); width: 280px; display: flex; flex-direction: column; gap: 10px; z-index: 600; font-family: 'Roboto', sans-serif; }
         .panel { background: var(--sidebar-bg); border: 1px solid var(--neon-blue); border-radius: 4px; overflow: hidden; box-shadow: 0 0 10px rgba(0, 212, 255, 0.1); }
         .panel-header { background: var(--sidebar-header-bg); color: #fff; padding: 5px 10px; font-size: 14px; font-weight: bold; border-bottom: 1px solid var(--neon-blue); font-family: 'Orbitron', sans-serif; letter-spacing: 1px; }
+        
         .card-details-body { padding: 10px; display: flex; gap: 10px; min-height: 200px; }
         .detail-img { width: 90px; height: 130px; background-color: #111; background-size: cover; border: 1px solid #555; position: relative; flex-shrink: 0; }
         .detail-img.empty::after { content: 'NO CARD'; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #444; font-size: 10px; text-align: center; width: 100%; }
+        
         .detail-info { flex: 1; display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: #ccc; }
         .info-header { border-bottom: 1px solid #444; padding-bottom: 4px; margin-bottom: 4px; }
         .card-name { font-size: 14px; font-weight: bold; color: #fff; margin-bottom: 2px; line-height: 1.2; }
         .card-meta { display: flex; gap: 8px; font-size: 10px; color: #aaa; align-items: center; }
+        
         .attr-icon { width: 16px; height: 16px; border-radius: 50%; display: inline-block; background: #555; text-align: center; line-height: 16px; font-weight: bold; font-size: 9px; color: #000; }
         .attr-LIGHT { background: #ffeeaa; } .attr-DARK { background: #aa55cc; } .attr-EARTH { background: #dca45c; }
         .attr-WATER { background: #66ccff; } .attr-FIRE { background: #ff5533; } .attr-WIND { background: #55aa77; }
+        
         .level-stars { color: #ffd700; letter-spacing: 1px; font-size: 12px; }
+        
         .info-row { display: flex; justify-content: space-between; border-bottom: 1px solid #333; padding-bottom: 2px; }
         .info-label { color: var(--neon-blue); } .info-val { color: #fff; font-weight: bold; }
+        
         .description-box { font-size: 10px; line-height: 1.3; color: #ddd; height: 80px; overflow-y: auto; margin-top: 5px; border: 1px solid #333; padding: 5px; background: rgba(0,0,0,0.3); white-space: pre-wrap; }
         .log-body { height: 120px; overflow-y: auto; padding: 5px 10px; font-size: 12px; color: #fff; }
         .log-entry { margin-bottom: 4px; border-bottom: 1px solid #333; padding-bottom: 2px; } .log-entry span { color: var(--neon-blue); }
@@ -45,23 +51,53 @@
         .opponent-hand-container { position: fixed; top: -15px; left: 0; width: 100%; display: flex; justify-content: center; gap: 5px; z-index: 90; pointer-events: none; }
         .opponent-hand-card { width: 70px; height: 100px; background-image: var(--card-back-url); background-size: cover; border-radius: 4px; box-shadow: 0 2px 10px rgba(0,0,0,0.5); border: 1px solid #444; transition: all 0.3s; }
         
-        .hand-container { position: fixed; bottom: 0; left: 0; width: 100%; height: 160px; display: flex; justify-content: center; align-items: flex-end; gap: 5px; z-index: 200; padding-bottom: 15px; pointer-events: none; }
-        .hand-card { width: 100px; height: 146px; background-size: cover; background-position: center; background-repeat: no-repeat; border-radius: 5px; border: 1px solid #555; box-shadow: -2px 2px 10px rgba(0,0,0,0.5); transition: transform 0.2s; cursor: pointer; background-color: #222; pointer-events: auto; transform-origin: bottom center; }
-        .hand-card:hover { transform: translateY(-40px) scale(1.2); z-index: 210; border-color: #fff; box-shadow: 0 0 15px rgba(255, 255, 255, 0.4); }
-        
+        /* FIX: Hand Container Height 0 + Overflow Visible ensures it doesn't block clicks above it */
+        .hand-container { 
+    position: fixed; 
+    bottom: 0; 
+    left: 0; 
+    width: 100%; 
+    height: 160px; /* Sufficient height for cards */
+    display: flex; 
+    justify-content: center; 
+    align-items: flex-end; /* Align cards to bottom */
+    gap: 5px; 
+    z-index: 200; 
+    padding-bottom: 15px; 
+    pointer-events: none; /* KEY FIX: Clicks pass through empty space */
+}
+
+/* FIX: Re-enable pointer events for the cards themselves */
+.hand-card { width: 100px; height: 146px; background-size: cover; background-position: center; background-repeat: no-repeat; border-radius: 5px; border: 1px solid #555; box-shadow: -2px 2px 10px rgba(0,0,0,0.5); transition: transform 0.2s; cursor: pointer; 
+    background-color: #222; 
+    pointer-events: auto; /* KEY FIX: Cards remain clickable */
+    transform-origin: bottom center;
+}
+
+.hand-card:hover { 
+    transform: translateY(-40px) scale(1.2); 
+    z-index: 210; 
+    border-color: #fff; 
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.4); 
+}
         .board-wrapper { perspective: 1000px; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; }
         .game-board { display: grid; grid-template-columns: repeat(5, var(--zone-width)); grid-template-rows: 130px 130px 80px 130px 130px; gap: 15px; transform: rotateX(40deg) scale(0.9) translateY(-120px); transform-style: preserve-3d; }
         
+        /* FIX: Zones need position relative and Z-index management */
         .zone { width: 100%; height: 100%; border-radius: 8px; position: relative; display: flex; justify-content: center; align-items: center; transition: all 0.3s ease; }
         .zone::after { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; border-radius: 8px; opacity: 0.6; box-shadow: inset 0 0 15px rgba(0,0,0,0.8); pointer-events: none; }
+        
         .opp-zone { border: var(--zone-border-width) solid var(--neon-red); } .opp-zone::after { background: rgba(255, 50, 50, 0.05); box-shadow: 0 0 10px var(--neon-red); }
-        .player-zone { border: var(--zone-border-width) solid var(--neon-blue); z-index: 50; transform: translateZ(1px); transform-style: preserve-3d; } .player-zone::after { background: rgba(0, 212, 255, 0.05); box-shadow: 0 0 10px var(--neon-blue); }
+        
+        /* FIX: Elevate Player Zone Z-Index and use TranslateZ to pop it above overlaps */
+        .player-zone { border: var(--zone-border-width) solid var(--neon-blue); z-index: 50; transform: translateZ(1px); transform-style: preserve-3d; } 
+        .player-zone::after { background: rgba(0, 212, 255, 0.05); box-shadow: 0 0 10px var(--neon-blue); }
+        
         .opp-zone.monster-zone.targetable { border-color: #ffcc00; box-shadow: 0 0 15px #ffcc00; cursor: crosshair; }
-        
         .zone-counter { position: absolute; bottom: -5px; right: -5px; background: rgba(0, 0, 0, 0.9); color: #fff; border: 1px solid #777; border-radius: 4px; padding: 2px 6px; font-size: 14px; font-weight: bold; box-shadow: 0 0 5px rgba(0,0,0,0.5); z-index: 20; transform: translateZ(5px); }
-        
+
         .phase-bar-overlay { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) translateZ(20px); width: 140%; display: flex; justify-content: center; align-items: center; pointer-events: none; }
-        .phase-content { display: flex; align-items: center; width: 100%; justify-content: center; position: relative; pointer-events: none; }
+        .phase-content { display: flex; align-items: center; width: 100%; justify-content: center; position: relative; pointer-events: none; /* Ensure strip doesn't block */ }
         .phase-strip { height: 40px; background: linear-gradient(90deg, transparent 0%, rgba(0, 40, 60, 0.9) 20%, rgba(0, 40, 60, 0.9) 80%, transparent 100%); border-top: 1px solid var(--neon-blue); border-bottom: 1px solid var(--neon-blue); flex-grow: 1; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; letter-spacing: 4px; text-shadow: 0 0 10px var(--neon-blue); position: relative; box-shadow: 0 0 15px rgba(0, 212, 255, 0.3); transition: color 0.3s; pointer-events: auto; }
         .phase-circle { width: 50px; height: 50px; border-radius: 50%; background: #000; border: 2px solid var(--neon-blue); color: var(--neon-blue); display: flex; justify-content: center; align-items: center; font-weight: bold; box-shadow: 0 0 15px var(--neon-blue); z-index: 2; pointer-events: auto; cursor: pointer; position: relative;}
         .phase-strip.opponent-turn { color: var(--neon-red); text-shadow: 0 0 10px var(--neon-red); border-color: var(--neon-red); }
@@ -72,12 +108,16 @@
         .phase-item:hover:not(.disabled) { background: var(--neon-blue); color: #000; box-shadow: 0 0 10px var(--neon-blue); }
         .phase-item.disabled { color: #555; cursor: default; }
 
-        .card { width: 68px; height: 99px; border-radius: 4px; box-shadow: 0 3px 6px rgba(0,0,0,0.9); background-size: cover; background-position: center; background-repeat: no-repeat; position: relative; transform-style: preserve-3d; transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); display: flex; flex-direction: column; justify-content: flex-end; background-color: #222; pointer-events: auto !important; }
+        .card { width: 68px; height: 99px; border-radius: 4px; box-shadow: 0 3px 6px rgba(0,0,0,0.9); background-size: cover; background-position: center; background-repeat: no-repeat; position: relative; transform-style: preserve-3d; transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); display: flex; flex-direction: column; justify-content: flex-end; background-color: #222; pointer-events: auto !important; /* Force Clickable */ }
         .card.face-down { background-image: var(--card-back-url); border: 1px solid #444; }
         .card.face-up { border: 1px solid #fff; box-shadow: 0 0 8px rgba(255, 255, 255, 0.2); }
         .card.pos-atk { transform: rotate(0deg); }
         .card.pos-def { transform: rotate(270deg); }
+        .player-zone .card { cursor: pointer; }
+        .opp-zone .card.face-up { cursor: pointer; }
         .player-zone .card:hover, .opp-zone .card.face-up:hover { filter: brightness(1.2); border-color: #ffff00; }
+        .gy-zone, .ex-deck-zone, .deck-zone { cursor: pointer; }
+        .gy-zone:hover, .ex-deck-zone:hover, .deck-zone:hover { box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.2); }
         .stats-bar { width: 100%; height: 16px; background: rgba(0, 0, 0, 0.85); display: flex; justify-content: space-around; align-items: center; font-size: 9px; font-weight: 900; border-bottom-left-radius: 4px; border-bottom-right-radius: 4px; opacity: 0; }
         .card.face-up .stats-bar { opacity: 1; }
         .stat-val { transition: all 0.3s; }
@@ -85,6 +125,12 @@
         .card.pos-atk .stat-def { color: var(--stat-inactive); }
         .card.pos-def .stat-def { color: var(--stat-active-def); text-shadow: 0 0 5px var(--stat-active-def); }
         .card.pos-def .stat-atk { color: var(--stat-inactive); }
+
+        .chain-toggle-container { position: fixed; bottom: 30px; right: 30px; z-index: 300; display: flex; flex-direction: column; align-items: center; }
+        .chain-btn { width: 55px; height: 55px; border-radius: 50%; background: radial-gradient(circle at 30% 30%, #444, #111); border: 2px solid var(--neon-blue); box-shadow: 0 0 10px var(--neon-blue), inset 0 0 10px var(--neon-blue); display: flex; justify-content: center; align-items: center; color: #fff; font-weight: 900; font-family: 'Orbitron', sans-serif; font-size: 13px; cursor: pointer; text-shadow: 0 0 5px var(--neon-blue); transition: all 0.2s ease; user-select: none; }
+        .chain-btn.state-auto { color: #fff; border-color: var(--neon-blue); }
+        .chain-btn.state-on { color: #fff; border-color: #ffcc00; box-shadow: 0 0 10px #ffcc00, inset 0 0 10px #ffcc00; text-shadow: 0 0 5px #ffcc00; }
+        .chain-btn.state-off { color: #888; border-color: #555; box-shadow: none; text-shadow: none; }
 
         .action-menu { position: fixed; background: rgba(0, 20, 40, 0.95); border: 1px solid var(--neon-blue); border-radius: 6px; box-shadow: 0 0 15px rgba(0, 212, 255, 0.3); z-index: 300; display: none; flex-direction: column; min-width: 120px; padding: 5px 0; }
         .action-menu.active { display: flex; }
@@ -107,22 +153,13 @@
 
         .surrender-btn { position: fixed; top: 20px; left: 20px; z-index: 700; background: rgba(50, 0, 0, 0.8); border: 2px solid #ff3333; color: #ff3333; padding: 8px 15px; font-family: 'Orbitron', sans-serif; font-weight: bold; font-size: 12px; cursor: pointer; border-radius: 4px; transition: all 0.2s; text-transform: uppercase; box-shadow: 0 0 10px rgba(255, 0, 0, 0.3); }
         .surrender-btn:hover { background: rgba(255, 0, 0, 0.2); box-shadow: 0 0 15px #ff3333; color: white; }
+        .debug-btn { position: fixed; top: 60px; left: 20px; z-index: 1000; padding: 5px; background: #333; color: white; cursor: pointer; border: 1px solid #666; font-size: 10px; }
         .draw-card-anim { position: absolute; width: 68px; height: 99px; background-image: var(--card-back-url); background-size: cover; border-radius: 4px; box-shadow: 0 0 10px white; z-index: 500; transition: all 0.8s ease-in-out; }
     </style>
 </head>
 <body>
     <button class="surrender-btn" onclick="alert('You Surrendered')">SURRENDER</button>
-
-    <div id="chainModal" class="modal-overlay" style="z-index: 1000; background: rgba(0,0,0,0.6);">
-        <div class="modal-content" style="height: auto; min-height: 200px; justify-content: center; align-items: center; text-align: center;">
-            <h2 style="color: #fff; font-family: 'Orbitron'; margin-bottom: 20px;">RESPONSE WINDOW</h2>
-            <p id="chainMsg" style="color: #ccc; margin-bottom: 30px; font-size: 14px;">Opponent declared an action. Activate a card?</p>
-            <div style="display: flex; gap: 20px;">
-                <button class="action-btn battle-option" onclick="ChainManager.confirmChain()">YES</button>
-                <button class="action-btn" onclick="ChainManager.declineChain()">NO</button>
-            </div>
-        </div>
-    </div>
+    <button class="debug-btn" onclick="switchTurn()">DEBUG: SWITCH TURN</button>
 
     <div class="modal-overlay" id="listModal">
         <div class="modal-content">
@@ -151,12 +188,17 @@
         </div>
     </div>
 
+    <div class="chain-toggle-container">
+        <div class="chain-btn state-auto" id="chainBtn" onclick="toggleChain()">AUTO</div>
+    </div>
+
     <div class="sidebar-left">
         <div class="panel">
             <div class="panel-header">CARD DETAILS</div>
             <div class="card-details-body">
                 <div class="detail-img empty" id="detailImg"></div>
                 <div class="detail-info">
+                    
                     <div class="info-header">
                         <div class="card-name" id="detailName"></div>
                         <div class="card-meta">
@@ -164,9 +206,11 @@
                             <span id="detailLevel" class="level-stars"></span>
                         </div>
                     </div>
+
                     <div class="info-row"><span class="info-label">Type</span><span class="info-val" id="detailType"></span></div>
                     <div class="info-row"><span class="info-label">ATK</span><span class="info-val" id="detailAtk"></span></div>
                     <div class="info-row"><span class="info-label">DEF</span><span class="info-val" id="detailDef"></span></div>
+                    
                     <div class="description-box" id="detailDesc">Select a card to view details.</div>
                 </div>
             </div>
@@ -183,6 +227,7 @@
 
     <div class="board-wrapper">
         <div class="game-board">
+            
             <div class="zone opp-zone deck-zone">
                 <div class="card face-down pos-atk"></div>
                 <div class="zone-counter" id="opp-deck-count"><?php echo count($oppDeck); ?></div>
