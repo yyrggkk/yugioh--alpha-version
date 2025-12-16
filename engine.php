@@ -154,6 +154,18 @@ $rawDB = [
         "desc" => "During each player's Standby Phase: The turn player takes 500 damage.", "race" => "Continuous", 
         "image_url" => "https://images.ygoprodeck.com/images/cards/24294108.jpg"
     ],
+    //traps
+    //normal trap
+    'reinforcements' => [
+        "id" => 17814387, "name" => "Reinforcements", "type" => "Trap Card", "humanReadableCardType" => "Normal Trap", "frameType" => "trap", 
+        "desc" => "Target 1 face-up monster on the field; it gains 500 ATK until the end of this turn.", "race" => "Normal", 
+        "image_url" => "https://images.ygoprodeck.com/images/cards/17814387.jpg"
+    ],
+    'justdesserts' => [
+        "id" => 24068492, "name" => "Just Desserts", "type" => "Trap Card", "humanReadableCardType" => "Normal Trap", "frameType" => "trap", 
+        "desc" => "Inflict 500 damage to your opponent for each monster they control.", "race" => "Normal", 
+        "image_url" => "https://images.ygoprodeck.com/images/cards/24068492.jpg"
+    ],
 ];
 
 // Pre-processing to normalize data for the Game Engine
@@ -193,22 +205,22 @@ function buildRandomDeck($db, $count) {
 $playerDeck = [
     $cardDB['geminielf'],
     $cardDB['geminielf'],
-    $cardDB['geminielf'],
     $cardDB['raigeki'],
     $cardDB['dianketo'],
     $cardDB['ookazi'],
     $cardDB['mst'],
     $cardDB['mst'],
-    $cardDB['rushrecklessly'],
     $cardDB['bannerofcourage'],
     $cardDB['burningland'],
     $cardDB['axeofdespair'],
     $cardDB['malevolentnuzzler'],
     $cardDB['mst'],
+    $cardDB['rushrecklessly'],
+    $cardDB['geminielf'],
     $cardDB['pot'],
-    $cardDB['geminielf'],
-    $cardDB['geminielf'],
     $cardDB['monsterreborn'],
+    $cardDB['justdesserts'],
+    $cardDB['reinforcements'],
 ];
 $oppDeck    = buildRandomDeck($cardDB, 20);
 

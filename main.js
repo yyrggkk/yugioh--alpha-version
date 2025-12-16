@@ -6,7 +6,8 @@ let gameState = {
     specialSummonsCount: 0,
     playerLP: 8000,
     oppLP: 8000,
-    gameOver: false
+    gameOver: false,
+    pendingOpponentAction: null // Store callback for resuming opponent turn
 };
 
 let selectedFieldCard = null;
@@ -14,7 +15,7 @@ let selectedHandCard = null;
 let battleState = { isAttacking: false, attackerCard: null };
 let spellState = { isTargeting: false, sourceCard: null, targetType: null };
 let tributeState = { isActive: false, pendingCard: null, requiredTributes: 0, currentTributes: [], actionType: null };
-let activeTurnBuffs = []; 
+let activeTurnBuffs = [];
 
 // Utility: Generate unique ID
 function generateUID() {
@@ -46,12 +47,12 @@ function sendToGraveyard(cardEl, owner) {
     if (cardEl.hasAttribute('data-equip-target-uid')) {
         const targetUid = cardEl.getAttribute('data-equip-target-uid');
         const targetMonster = document.querySelector(`.card[data-uid="${targetUid}"]`);
-        
+
         // Check if we stored the specific buff values on this spell
         if (targetMonster && cardEl.hasAttribute('data-buff-val-atk')) {
             const buffAtk = parseInt(cardEl.getAttribute('data-buff-val-atk'));
             const buffDef = parseInt(cardEl.getAttribute('data-buff-val-def'));
-            
+
             // REVERT THE BUFF
             log(`Equip destroyed: Removing ${buffAtk} ATK from ${targetMonster.getAttribute('data-name')}`);
             modifyStats(targetMonster, -buffAtk, -buffDef);
@@ -62,7 +63,7 @@ function sendToGraveyard(cardEl, owner) {
     // Check if the card has a forced return destination (e.g. from Monster Reborn)
     const originalOwner = cardEl.getAttribute('data-original-owner');
     let finalDest = owner; // Default to current controller
-    
+
     if (originalOwner && (originalOwner === 'player' || originalOwner === 'opponent')) {
         finalDest = originalOwner;
         if (finalDest !== owner) {
@@ -94,7 +95,7 @@ function sendToGraveyard(cardEl, owner) {
         oppGYData.push(cardData);
         updateGYVisual('oppGY', cardData.img);
     }
-    
+
     cardEl.remove();
     updateCounters();
 }
@@ -106,7 +107,7 @@ function updateGYVisual(elementId, imgUrl) {
     const topCard = document.createElement('div');
     topCard.className = 'card face-up';
     topCard.style.backgroundImage = `url('${imgUrl}')`;
-    topCard.style.width = '100%'; topCard.style.height = '100%'; topCard.style.border = 'none'; 
+    topCard.style.width = '100%'; topCard.style.height = '100%'; topCard.style.border = 'none';
     gyZone.prepend(topCard);
 }
 
@@ -122,7 +123,7 @@ function modifyStats(card, atkMod, defMod) {
     card.setAttribute('data-atk', currentAtk);
     card.setAttribute('data-def', currentDef);
     const statsBar = card.querySelector('.stats-bar');
-    if(statsBar) {
+    if (statsBar) {
         statsBar.querySelector('.stat-atk').textContent = currentAtk;
         statsBar.querySelector('.stat-def').textContent = currentDef;
     }
@@ -130,19 +131,19 @@ function modifyStats(card, atkMod, defMod) {
 
 // EFFECT FACTORY: Shortcut generator for common effects
 const EffectFactory = {
-    draw: function(count) {
-        return function(card) {
+    draw: function (count) {
+        return function (card) {
             const owner = getOwner(card);
             log(`${owner === 'player' ? 'You' : 'Opponent'} draws ${count} card(s)!`);
-            for(let i=0; i<count; i++) {
-                if(owner === 'player') drawCard();
+            for (let i = 0; i < count; i++) {
+                if (owner === 'player') drawCard();
                 else drawOpponentCard();
             }
             return true;
         };
     },
-    modifyLP: function(val) {
-        return function(card) {
+    modifyLP: function (val) {
+        return function (card) {
             const owner = getOwner(card);
             if (val > 0) {
                 log(`${owner === 'player' ? 'You' : 'Opponent'} recovers ${val} LP!`);
@@ -156,22 +157,22 @@ const EffectFactory = {
         };
     },
     // UPDATED: Buff Factory now saves the boost amount on the card
-    buff: function(atk, def) {
-        return function(card) {
-            log(`Select a monster to buff (${atk > 0 ? '+'+atk : atk}/${def > 0 ? '+'+def : def}).`);
-            spellState.isTargeting = true; 
-            spellState.sourceCard = card; 
+    buff: function (atk, def) {
+        return function (card) {
+            log(`Select a monster to buff (${atk > 0 ? '+' + atk : atk}/${def > 0 ? '+' + def : def}).`);
+            spellState.isTargeting = true;
+            spellState.sourceCard = card;
             spellState.targetType = 'monster';
-            
+
             // Store specific stats for the resolver
             card.setAttribute('data-effect-atk', atk);
             card.setAttribute('data-effect-def', def);
-            
+
             // STORE PERSISTENTLY FOR CLEANUP (MST Fix)
             card.setAttribute('data-buff-val-atk', atk);
             card.setAttribute('data-buff-val-def', def);
-            
-            highlightTargets('monster'); 
+
+            highlightTargets('monster');
             return false; // Wait for target
         };
     }
@@ -181,11 +182,11 @@ const EffectFactory = {
 function reviveMonster(targetData, newController) {
     // 1. Remove from source Graveyard array
     if (targetData.sourceGY === 'player') {
-        const index = playerGYData.findIndex(c => c.name === targetData.name && c.img === targetData.img); 
-        if(index > -1) playerGYData.splice(index, 1);
+        const index = playerGYData.findIndex(c => c.name === targetData.name && c.img === targetData.img);
+        if (index > -1) playerGYData.splice(index, 1);
     } else {
         const index = oppGYData.findIndex(c => c.name === targetData.name && c.img === targetData.img);
-        if(index > -1) oppGYData.splice(index, 1);
+        if (index > -1) oppGYData.splice(index, 1);
     }
     updateCounters();
 
@@ -207,12 +208,12 @@ function reviveMonster(targetData, newController) {
     newCard.style.backgroundImage = `url('${targetData.img}')`;
     newCard.setAttribute('data-uid', generateUID());
     newCard.setAttribute('data-name', targetData.name);
-    
+
     // --- THIS WAS MISSING ---
-    newCard.setAttribute('data-img', targetData.img); 
+    newCard.setAttribute('data-img', targetData.img);
     // ------------------------
 
-    newCard.setAttribute('data-atk', targetData.atk); 
+    newCard.setAttribute('data-atk', targetData.atk);
     newCard.setAttribute('data-def', targetData.def);
     newCard.setAttribute('data-original-atk', targetData.atk);
     newCard.setAttribute('data-original-def', targetData.def);
@@ -221,12 +222,12 @@ function reviveMonster(targetData, newController) {
     newCard.setAttribute('data-level', targetData.level);
     newCard.setAttribute('data-attribute', targetData.attribute);
     newCard.setAttribute('data-race', targetData.race);
-    
+
     // CRITICAL: Set original owner so it returns correctly
     newCard.setAttribute('data-original-owner', targetData.sourceGY);
-    
+
     newCard.innerHTML = `<div class="stats-bar"><span class="stat-val stat-atk">${targetData.atk}</span><span class="stat-val stat-def">${targetData.def}</span></div>`;
-    
+
     targetZone.appendChild(newCard);
     log(`Revived ${targetData.name} from ${targetData.sourceGY === 'player' ? 'Your' : 'Opponent'} Graveyard!`);
 }
@@ -238,22 +239,41 @@ const cardEffects = {
     'Malevolent Nuzzler': EffectFactory.buff(700, 0),
     'Black Pendant': EffectFactory.buff(500, 0),
     'Rush Recklessly': EffectFactory.buff(700, 0),
-    'Dian Keto the Cure Master': EffectFactory.modifyLP(1000), 
-    'Ookazi': EffectFactory.modifyLP(-800),    
+    'Dian Keto the Cure Master': EffectFactory.modifyLP(1000),
+    'Ookazi': EffectFactory.modifyLP(-800),
     'Hinotama': EffectFactory.modifyLP(-500),
 
-    // --- UPDATED MONSTER REBORN ---
-    'Monster Reborn': function(card) {
+    // --- NEW TRAPS ---
+    'Reinforcements': EffectFactory.buff(500, 0), // "Target 1 face-up monster ... gains 500 ATK"
+    'Just Desserts': function (card) {
         const owner = getOwner(card);
-        
+        // "Inflict 500 damage to your opponent for each monster they control."
+        // If 'player' activates it, count 'opponent' monsters.
+        const targetZone = owner === 'player' ? '.opp-zone.monster-zone .card' : '.player-zone.monster-zone .card';
+        const count = document.querySelectorAll(targetZone).length;
+        if (count === 0) {
+            log("Just Desserts: No monsters to count. 0 Damage.");
+            return true;
+        }
+        const damage = count * 500;
+        const victim = owner === 'player' ? 'opponent' : 'player';
+        log(`Just Desserts: ${count} monster(s) found. Inflicting ${damage} damage to ${victim}!`);
+        updateLP(damage, victim);
+        return true;
+    },
+
+    // --- UPDATED MONSTER REBORN ---
+    'Monster Reborn': function (card) {
+        const owner = getOwner(card);
+
         // Collect Targets from BOTH graveyards
         const pTargets = playerGYData
             .filter(c => c.category === 'monster')
-            .map((c, i) => ({...c, sourceGY: 'player'}));
-            
+            .map((c, i) => ({ ...c, sourceGY: 'player' }));
+
         const oTargets = oppGYData
             .filter(c => c.category === 'monster')
-            .map((c, i) => ({...c, sourceGY: 'opponent'}));
+            .map((c, i) => ({ ...c, sourceGY: 'opponent' }));
 
         const allTargets = [...pTargets, ...oTargets];
 
@@ -266,18 +286,18 @@ const cardEffects = {
         const listModal = document.getElementById('listModal');
         const listGrid = document.getElementById('listGrid');
         const listTitle = document.getElementById('listTitle');
-        
+
         listTitle.textContent = "Select a Monster to Revive";
         listGrid.innerHTML = '';
 
         allTargets.forEach(target => {
-            const el = document.createElement('div'); 
+            const el = document.createElement('div');
             el.className = 'list-card';
             el.style.backgroundImage = `url('${target.img}')`;
             // Blue border for yours, Red for theirs
             el.style.border = target.sourceGY === 'player' ? '2px solid #00d4ff' : '2px solid #ff3333';
-            
-            el.onclick = function(e) {
+
+            el.onclick = function (e) {
                 e.stopPropagation();
                 reviveMonster(target, owner);
                 listModal.classList.remove('active');
@@ -291,27 +311,27 @@ const cardEffects = {
         return false; // Pause standard cleanup (handled in onclick)
     },
 
-    'Raigeki': function(card) {
+    'Raigeki': function (card) {
         const owner = getOwner(card);
         const victim = (owner === 'player') ? 'opponent' : 'player';
         log(`Effect: Destroy all ${victim} monsters!`);
-        
+
         const targetZone = (victim === 'player') ? '.player-zone' : '.opp-zone';
         const targets = document.querySelectorAll(`${targetZone}.monster-zone .card`);
-        
+
         let destroyedCount = 0;
         targets.forEach(c => {
-            c.style.transition = 'all 0.5s'; 
-            c.style.transform = 'scale(0) rotate(360deg)'; 
+            c.style.transition = 'all 0.5s';
+            c.style.transform = 'scale(0) rotate(360deg)';
             c.style.opacity = '0';
             setTimeout(() => { sendToGraveyard(c, victim); }, 500);
             destroyedCount++;
         });
-        if(destroyedCount === 0) log("Effect: No monsters to destroy.");
+        if (destroyedCount === 0) log("Effect: No monsters to destroy.");
         return true;
     },
 
-    'Mystical Space Typhoon': function(card) {
+    'Mystical Space Typhoon': function (card) {
         log("Select a Spell/Trap to destroy.");
         spellState.isTargeting = true; spellState.sourceCard = card; spellState.targetType = 'spell';
         highlightTargets('spell'); return false;
@@ -320,7 +340,7 @@ const cardEffects = {
     // --- CONTINUOUS SPELLS ---
     'Banner of Courage': {
         type: 'Continuous',
-        apply: function(card, currentPhase, activePlayer) {
+        apply: function (card, currentPhase, activePlayer) {
             const owner = getOwner(card);
             if (currentPhase === 'BP' && activePlayer === owner) {
                 const selector = owner === 'player' ? '.player-zone.monster-zone .card' : '.opp-zone.monster-zone .card';
@@ -343,7 +363,7 @@ const cardEffects = {
     },
     'Burning Land': {
         type: 'Continuous',
-        apply: function(card) { /* Logic handled in Standby Phase trigger */ }
+        apply: function (card) { /* Logic handled in Standby Phase trigger */ }
     }
 };
 
@@ -359,11 +379,11 @@ function resolveSpellTarget(target) {
     if (source.hasAttribute('data-effect-atk')) {
         const atk = parseInt(source.getAttribute('data-effect-atk'));
         const def = parseInt(source.getAttribute('data-effect-def'));
-        
+
         modifyStats(target, atk, def);
-        
+
         const isEquip = source.getAttribute('data-race') === 'Equip';
-        
+
         if (isEquip) {
             source.setAttribute('data-equip-target-uid', target.getAttribute('data-uid'));
             log(`${target.getAttribute('data-name')} equipped with ${effectName}!`);
@@ -371,9 +391,12 @@ function resolveSpellTarget(target) {
             // Temporary Buff (Rush Recklessly)
             activeTurnBuffs.push({ uid: target.getAttribute('data-uid'), atkMod: atk, defMod: def });
             log(`${target.getAttribute('data-name')} gains ${atk} ATK temporarily!`);
-            
+
             const spellOwner = getOwner(source);
-            setTimeout(() => sendToGraveyard(source, spellOwner), 500);
+            setTimeout(() => {
+                sendToGraveyard(source, spellOwner);
+                if (!isPlayerTurn && gameState.pendingOpponentAction) resumeOpponentTurn();
+            }, 500);
         }
         return;
     }
@@ -386,7 +409,10 @@ function resolveSpellTarget(target) {
         // Destroy target
         sendToGraveyard(target, targetOwner);
         // Destroy MST itself
-        setTimeout(() => sendToGraveyard(source, spellOwner), 500);
+        setTimeout(() => {
+            sendToGraveyard(source, spellOwner);
+            if (!isPlayerTurn && gameState.pendingOpponentAction) resumeOpponentTurn();
+        }, 500);
     }
 }
 
@@ -395,10 +421,32 @@ function highlightTargets(type) {
     if (type === 'monster') selector = '.monster-zone .card.face-up';
     else if (type === 'spell') selector = '.spell-trap-zone .card, .field-zone .card';
     const targets = document.querySelectorAll(selector);
-    targets.forEach(el => { if(el !== spellState.sourceCard) el.parentElement.classList.add('targetable'); });
+    targets.forEach(el => { if (el !== spellState.sourceCard) el.parentElement.classList.add('targetable'); });
 }
 
 function clearHighlights() { document.querySelectorAll('.zone').forEach(el => el.classList.remove('targetable')); }
+
+function cancelSpellActivation(card) {
+    spellState.isTargeting = false;
+    spellState.sourceCard = null;
+    clearHighlights();
+    log("Activation Cancelled.");
+
+    // Revert Visuals (Flip back down)
+    // Assuming card was set (Traps/Set Spells). 
+    // If it was played from hand, we might need to return to hand? 
+    // For now, let's assume if it's on field, we flip it down.
+    if (card && card.parentElement && card.parentElement.classList.contains('spell-trap-zone')) {
+        card.classList.remove('face-up');
+        card.classList.add('face-down');
+        card.style.backgroundImage = 'none'; // CSS handles face-down image usually, or we clear the specific URL
+        // Re-cleaning text content if any
+        // card.innerHTML = ''; 
+    }
+
+    // Resume Opponent Turn if necessary
+    if (!isPlayerTurn && gameState.pendingOpponentAction) resumeOpponentTurn();
+}
 
 // =========================================
 // 3. COUNTERS & LP
@@ -413,10 +461,10 @@ function updateCounters() {
 }
 
 function updateLP(damage, target) {
-    if(target === 'player') gameState.playerLP -= damage;
+    if (target === 'player') gameState.playerLP -= damage;
     else gameState.oppLP -= damage;
-    if(gameState.playerLP < 0) gameState.playerLP = 0;
-    if(gameState.oppLP < 0) gameState.oppLP = 0;
+    if (gameState.playerLP < 0) gameState.playerLP = 0;
+    if (gameState.oppLP < 0) gameState.oppLP = 0;
     document.getElementById('player-lp-val').textContent = gameState.playerLP;
     document.getElementById('opp-lp-val').textContent = gameState.oppLP;
     checkWinCondition();
@@ -435,15 +483,104 @@ function endDuel(msg) {
 // =========================================
 // 4. GAME LOOP & PHASES
 // =========================================
+// =========================================
+// 4. GAME LOOP & PHASES
+// =========================================
 let currentPhase = 'DP';
 let isPlayerTurn = true;
 let turnCount = 1;
 const phaseOrder = ['DP', 'SP', 'MP1', 'BP', 'MP2', 'EP'];
 
-window.onload = function() {
+// Assuming gameState is defined globally or passed around
+// Adding pendingOpponentAction to gameState
+// gameState definition removed (duplicate)
+
+// --- NEW: RESPONSE / CHAIN SYSTEM ---
+function checkResponseWindow(nextActionCallback) {
+    if (gameState.gameOver) return;
+
+    // RULE: Same logic as before
+    const setCards = document.querySelectorAll('.spell-trap-zone .card.face-down');
+    let candidates = [];
+
+    setCards.forEach(c => {
+        const name = c.getAttribute('data-name');
+        const setTurn = parseInt(c.getAttribute('data-turn'));
+        const type = c.getAttribute('data-type');
+        const isTrap = type.includes('Trap');
+        const isQP = type.includes('Quick-Play');
+
+        if (isTrap || isQP) {
+            const canActivate = (setTurn < turnCount) || (!isPlayerTurn && setTurn === turnCount);
+            if (canActivate) {
+                candidates.push({ el: c, name: name, img: c.getAttribute('data-img') });
+            }
+        }
+    });
+
+    if (candidates.length > 0) {
+        // Pause and Show Modal
+        gameState.pendingOpponentAction = nextActionCallback;
+
+        // Use existing List Modal
+        const listModal = document.getElementById('listModal');
+        const listGrid = document.getElementById('listGrid');
+        const listTitle = document.getElementById('listTitle');
+
+        listTitle.textContent = `Opponent Phase: ${currentPhase}. Activate a card?`;
+        listGrid.innerHTML = '';
+
+        // Add "Pass / Cancel" Button (Styled as a card or special button)
+        const passBtn = document.createElement('div');
+        passBtn.className = 'list-card';
+        passBtn.style.display = 'flex'; passBtn.style.alignItems = 'center'; passBtn.style.justifyContent = 'center';
+        passBtn.style.border = '2px dashed #888'; passBtn.style.backgroundColor = '#333';
+        passBtn.textContent = 'PASS (Do Nothing)';
+        passBtn.onclick = function (e) {
+            e.stopPropagation();
+            resumeOpponentTurn();
+            listModal.classList.remove('active');
+        };
+        listGrid.appendChild(passBtn);
+
+        // Add Candidates
+        candidates.forEach(cand => {
+            const el = document.createElement('div');
+            el.className = 'list-card';
+            el.style.backgroundImage = `url('${cand.img}')`;
+            el.onclick = function (e) {
+                e.stopPropagation();
+                listModal.classList.remove('active');
+                // Activate logic
+                activateSetCard(cand.el, true);
+                // Note: activateSetCard checks if effect is finished.
+                // If it needs targeting, it returns false, so we DON'T resume yet.
+                // If it finishes immediately (Just Desserts), we might need to resume manually?
+                // activateSetCard -> finishes? -> check card effect return?
+                // `activateSetCard` logic needs a tweak to know if it finished to resume.
+            };
+            listGrid.appendChild(el);
+        });
+
+        listModal.classList.add('active');
+    } else {
+        // No candidates, proceed immediately
+        setTimeout(nextActionCallback, 500);
+    }
+}
+
+function resumeOpponentTurn() {
+    if (gameState.pendingOpponentAction) {
+        const cb = gameState.pendingOpponentAction;
+        gameState.pendingOpponentAction = null;
+        setTimeout(cb, 500);
+    }
+}
+
+window.onload = function () {
     document.querySelectorAll('.card').forEach(c => {
-        if(!c.hasAttribute('data-uid')) c.setAttribute('data-uid', generateUID());
-        if(!c.hasAttribute('data-original-atk')) {
+        if (!c.hasAttribute('data-uid')) c.setAttribute('data-uid', generateUID());
+        if (!c.hasAttribute('data-original-atk')) {
             c.setAttribute('data-original-atk', c.getAttribute('data-atk'));
             c.setAttribute('data-original-def', c.getAttribute('data-def'));
         }
@@ -457,35 +594,35 @@ function startDuelSequence() {
     log("Turn 1: Draw Phase");
     let drawsLeft = 4;
     let interval = setInterval(() => {
-        if(drawsLeft > 0) { drawCard(); drawOpponentCard(); drawsLeft--; }
+        if (drawsLeft > 0) { drawCard(); drawOpponentCard(); drawsLeft--; }
         else { clearInterval(interval); proceedToMainPhase(); }
     }, 600);
 }
 
 function runNormalTurn() {
-    if(gameState.gameOver) return;
+    if (gameState.gameOver) return;
     log(`Turn ${turnCount}: Draw Phase`);
     setPhaseText('DP', "DRAW PHASE");
-    if(playerDeckData.length === 0) { endDuel("You Lost! Deck is empty."); return; }
+    if (playerDeckData.length === 0) { endDuel("You Lost! Deck is empty."); return; }
     setTimeout(() => { drawCard(); proceedToMainPhase(); }, 500);
 }
 
 function proceedToMainPhase() {
     setTimeout(() => {
         setPhaseText('SP', "STANDBY PHASE"); log("Standby Phase");
-        
+
         const spells = document.querySelectorAll('.spell-trap-zone .card.face-up');
         spells.forEach(s => {
-            if(s.getAttribute('data-name') === 'Burning Land') {
+            if (s.getAttribute('data-name') === 'Burning Land') {
                 log("Burning Land: 500 Damage to both!");
                 updateLP(500, 'player'); updateLP(500, 'opponent');
                 s.style.boxShadow = "0 0 20px #ff5533"; setTimeout(() => s.style.boxShadow = "", 500);
             }
         });
 
-        setTimeout(() => { 
-            setPhaseText('MP1', "MAIN PHASE 1"); 
-            log("Main Phase 1"); 
+        setTimeout(() => {
+            setPhaseText('MP1', "MAIN PHASE 1");
+            log("Main Phase 1");
             currentPhase = 'MP1';
             updateContinuousEffects();
         }, 1500);
@@ -493,14 +630,14 @@ function proceedToMainPhase() {
 }
 
 function switchTurn() {
-    if(gameState.gameOver) return;
-    
+    if (gameState.gameOver) return;
+
     // Clear Turn Buffs
-    if(activeTurnBuffs.length > 0) {
+    if (activeTurnBuffs.length > 0) {
         log("End Phase: Resetting temporary boosts.");
         activeTurnBuffs.forEach(buff => {
             const card = document.querySelector(`.card[data-uid="${buff.uid}"]`);
-            if(card) modifyStats(card, -buff.atkMod, -buff.defMod);
+            if (card) modifyStats(card, -buff.atkMod, -buff.defMod);
         });
         activeTurnBuffs = [];
     }
@@ -511,40 +648,61 @@ function switchTurn() {
     document.querySelectorAll('.card').forEach(c => c.setAttribute('data-attacked', 'false'));
     cancelBattleMode();
     spellState.isTargeting = false; clearHighlights();
-    cancelTributeMode(); 
-    
+    cancelTributeMode();
+
     updateContinuousEffects();
 
-    if(isPlayerTurn) {
+    if (isPlayerTurn) {
         turnCount++;
         document.getElementById('phaseText').classList.remove('opponent-turn');
         runNormalTurn();
     } else {
         document.getElementById('phaseText').classList.add('opponent-turn');
         setPhaseText('DP', "DRAW PHASE");
-        if(oppDeckData.length === 0) { endDuel("You Won! Opponent Deck is empty."); return; }
+        if (oppDeckData.length === 0) { endDuel("You Won! Opponent Deck is empty."); return; }
         log("Opponent's Turn");
-        setTimeout(() => {
-            drawOpponentCard();
-            setTimeout(() => {
-                setPhaseText('SP', "STANDBY PHASE");
-                const spells = document.querySelectorAll('.spell-trap-zone .card.face-up');
-                spells.forEach(s => {
-                    if(s.getAttribute('data-name') === 'Burning Land') {
-                        updateLP(500, 'player'); updateLP(500, 'opponent');
-                    }
-                });
-                
-                setTimeout(() => { 
-                    setPhaseText('MP1', "MAIN PHASE 1"); 
-                    currentPhase = 'MP1'; 
-                    updateContinuousEffects();
-                    log("Opponent ends turn.");
-                    setTimeout(switchTurn, 1000); 
-                }, 1000);
-            }, 1000);
-        }, 500);
+
+        // Start Opponent Flow
+        setTimeout(oppDrawPhase, 1000);
     }
+}
+
+// --- OPPONENT AI FLOW ---
+function oppDrawPhase() {
+    if (gameState.gameOver) return;
+    drawOpponentCard();
+    checkResponseWindow(oppStandbyPhase);
+}
+
+function oppStandbyPhase() {
+    if (gameState.gameOver) return;
+    setPhaseText('SP', "STANDBY PHASE");
+    const spells = document.querySelectorAll('.spell-trap-zone .card.face-up');
+    spells.forEach(s => {
+        if (s.getAttribute('data-name') === 'Burning Land') {
+            updateLP(500, 'player'); updateLP(500, 'opponent');
+        }
+    });
+
+    checkResponseWindow(oppMainPhase);
+}
+
+function oppMainPhase() {
+    if (gameState.gameOver) return;
+    setPhaseText('MP1', "MAIN PHASE 1");
+    currentPhase = 'MP1';
+    updateContinuousEffects();
+
+    // Simple AI: Summon if possible?
+    // (Existing code didn't do much AI, just waited and ended turn. We keep it simple)
+
+    checkResponseWindow(oppEndTurn);
+}
+
+function oppEndTurn() {
+    if (gameState.gameOver) return;
+    log("Opponent ends turn.");
+    setTimeout(switchTurn, 1000);
 }
 
 function updateContinuousEffects() {
@@ -562,7 +720,7 @@ function updateContinuousEffects() {
 function setPhase(phase) {
     const currIdx = phaseOrder.indexOf(currentPhase);
     const targetIdx = phaseOrder.indexOf(phase);
-    
+
     if (targetIdx <= currIdx && turnCount > 1) return;
     if (currentPhase === 'MP1' && phase === 'MP2') return;
     if (turnCount === 1 && (phase === 'BP' || phase === 'MP2')) { log("Cannot conduct Battle Phase on the first turn."); return; }
@@ -574,9 +732,9 @@ function setPhase(phase) {
     currentPhase = phase;
     phaseBtn.textContent = phase;
     let text = "MAIN PHASE 1";
-    if(phase === 'BP') text = "BATTLE PHASE"; 
-    if(phase === 'MP2') text = "MAIN PHASE 2"; 
-    if(phase === 'EP') text = "END PHASE";
+    if (phase === 'BP') text = "BATTLE PHASE";
+    if (phase === 'MP2') text = "MAIN PHASE 2";
+    if (phase === 'EP') text = "END PHASE";
     phaseText.textContent = text;
     phaseMenu.classList.remove('active');
     log(`Phase: ${text}`);
@@ -584,27 +742,27 @@ function setPhase(phase) {
     if (phase !== 'BP') cancelBattleMode();
     updateContinuousEffects();
 
-    if(phase === 'EP') setTimeout(switchTurn, 1000);
+    if (phase === 'EP') setTimeout(switchTurn, 1000);
 }
 
 function setPhaseText(short, long) { currentPhase = short; phaseBtn.textContent = short; phaseText.textContent = long; }
 
 // --- DRAW LOGIC ---
 function drawCard() {
-    if(gameState.gameOver) return;
+    if (gameState.gameOver) return;
     if (playerDeckData.length > 0) {
         const card = playerDeckData.pop(); playerHandData.push(card); updateCounters();
         const rect = document.getElementById('playerDeck').getBoundingClientRect();
-        const animCard = document.createElement('div'); animCard.className = 'draw-card-anim'; 
+        const animCard = document.createElement('div'); animCard.className = 'draw-card-anim';
         animCard.style.left = rect.left + 'px'; animCard.style.top = rect.top + 'px';
         document.body.appendChild(animCard);
         setTimeout(() => {
             const handRect = document.getElementById('playerHand').getBoundingClientRect();
-            animCard.style.top = (handRect.top + 20) + 'px'; animCard.style.left = (handRect.left + handRect.width/2) + 'px'; 
+            animCard.style.top = (handRect.top + 20) + 'px'; animCard.style.left = (handRect.left + handRect.width / 2) + 'px';
             animCard.style.transform = 'scale(0.5)'; animCard.style.opacity = '0';
         }, 50);
         setTimeout(() => { animCard.remove(); renderHandCard(card); }, 800);
-    } else { if(currentPhase === 'DP' && isPlayerTurn) endDuel("You Lost! Deck is empty."); }
+    } else { if (currentPhase === 'DP' && isPlayerTurn) endDuel("You Lost! Deck is empty."); }
 }
 
 function drawOpponentCard() {
@@ -620,9 +778,9 @@ function renderHandCard(card) {
     const el = document.createElement('div');
     el.className = 'hand-card';
     el.style.backgroundImage = `url('${card.img}')`;
-    el.setAttribute('data-name', card.name); 
+    el.setAttribute('data-name', card.name);
     el.setAttribute('data-type', card.full_type);
-    el.setAttribute('data-atk', card.atk); el.setAttribute('data-def', card.def); 
+    el.setAttribute('data-atk', card.atk); el.setAttribute('data-def', card.def);
     el.setAttribute('data-original-atk', card.atk); el.setAttribute('data-original-def', card.def);
     el.setAttribute('data-desc', card.desc); el.setAttribute('data-img', card.img);
     el.setAttribute('data-card-category', card.category);
@@ -648,7 +806,7 @@ function initiateTribute(card, required, action) {
 function handleTributeSelection(target) {
     if (tributeState.currentTributes.includes(target)) return;
     tributeState.currentTributes.push(target);
-    target.style.opacity = '0.5'; 
+    target.style.opacity = '0.5';
     log(`Selected tribute: ${target.getAttribute('data-name')} (${tributeState.currentTributes.length}/${tributeState.requiredTributes})`);
 
     if (tributeState.currentTributes.length >= tributeState.requiredTributes) {
@@ -659,20 +817,20 @@ function handleTributeSelection(target) {
 }
 
 function cancelTributeMode() {
-    if(tributeState.currentTributes.length > 0) { tributeState.currentTributes.forEach(t => t.style.opacity = '1'); }
+    if (tributeState.currentTributes.length > 0) { tributeState.currentTributes.forEach(t => t.style.opacity = '1'); }
     document.querySelectorAll('.zone').forEach(el => el.classList.remove('targetable'));
     tributeState.isActive = false; tributeState.pendingCard = null; tributeState.currentTributes = []; tributeState.actionType = null;
 }
 
 function performAction(action) {
     if (!selectedHandCard) return;
-    
+
     const canActInMain = (currentPhase === 'MP1' || currentPhase === 'MP2');
     const isQP = selectedHandCard.getAttribute('data-race') === 'Quick-Play';
     const canActInBP = (currentPhase === 'BP' && isQP && action === 'activate');
-    
+
     if (!canActInMain && !canActInBP) { alert("Action not allowed in this Phase!"); actionMenu.classList.remove('active'); return; }
-    
+
     const isMonsterSummon = (action === 'summon') || (action === 'set' && selectedHandCard.getAttribute('data-card-category') === 'monster');
     if (isMonsterSummon && gameState.normalSummonUsed) { alert("Already used Normal Summon/Set this turn!"); actionMenu.classList.remove('active'); return; }
 
@@ -690,7 +848,7 @@ function performAction(action) {
             }
             actionMenu.classList.remove('active');
             initiateTribute(selectedHandCard, tributesNeeded, action);
-            return; 
+            return;
         }
     }
     executeCardPlay(selectedHandCard, action);
@@ -698,11 +856,11 @@ function performAction(action) {
 
 function executeCardPlay(handCardEl, action) {
     const cardData = {
-        name: handCardEl.getAttribute('data-name'), 
+        name: handCardEl.getAttribute('data-name'),
         type: handCardEl.getAttribute('data-type'),
-        atk: handCardEl.getAttribute('data-atk'), 
+        atk: handCardEl.getAttribute('data-atk'),
         def: handCardEl.getAttribute('data-def'),
-        desc: handCardEl.getAttribute('data-desc'), 
+        desc: handCardEl.getAttribute('data-desc'),
         img: handCardEl.getAttribute('data-img'),
         category: handCardEl.getAttribute('data-card-category'),
         level: handCardEl.getAttribute('data-level'),
@@ -711,7 +869,7 @@ function executeCardPlay(handCardEl, action) {
     };
 
     let targetZone = null; let cssClass = '';
-    
+
     if (cardData.category === 'monster') {
         const zones = ['p-m1', 'p-m2', 'p-m3'];
         for (let id of zones) { if (document.getElementById(id).children.length === 0) { targetZone = document.getElementById(id); break; } }
@@ -732,16 +890,16 @@ function executeCardPlay(handCardEl, action) {
     const uid = generateUID();
     newCard.setAttribute('data-uid', uid);
 
-    for(let k in cardData) {
+    for (let k in cardData) {
         if (k === 'category') newCard.setAttribute('data-card-category', cardData[k]);
-        else newCard.setAttribute('data-'+k, cardData[k]);
+        else newCard.setAttribute('data-' + k, cardData[k]);
     }
     newCard.setAttribute('data-original-atk', cardData.atk);
     newCard.setAttribute('data-original-def', cardData.def);
 
     if (cssClass.includes('face-up')) {
         newCard.style.backgroundImage = `url('${cardData.img}')`;
-        if(cardData.category === 'monster') {
+        if (cardData.category === 'monster') {
             newCard.innerHTML = `<div class="stats-bar"><span class="stat-val stat-atk">${cardData.atk}</span><span class="stat-val stat-def">${cardData.def}</span></div>`;
         }
     }
@@ -749,36 +907,36 @@ function executeCardPlay(handCardEl, action) {
 
     if (action === 'activate') {
         let finished = true;
-        if(cardEffects[cardData.name] && typeof cardEffects[cardData.name] === 'function') { 
-            finished = cardEffects[cardData.name](newCard); 
-        } 
+        if (cardEffects[cardData.name] && typeof cardEffects[cardData.name] === 'function') {
+            finished = cardEffects[cardData.name](newCard);
+        }
         else if (cardEffects[cardData.name] && cardEffects[cardData.name].type === 'Continuous') {
             log(`Activated Continuous Spell: ${cardData.name}`);
-            finished = false; 
+            finished = false;
             updateContinuousEffects();
         }
         else { log(`Activated: ${cardData.name}`); }
-        
+
         const typeStr = cardData.type || "";
         const raceStr = cardData.race || "";
         const isEquip = raceStr === 'Equip' || typeStr.includes('Equip');
         const isCont = raceStr === 'Continuous' || typeStr.includes('Continuous');
-        
+
         if (!isEquip && !isCont && finished) {
-             setTimeout(() => { sendToGraveyard(newCard, 'player'); }, 1000);
+            setTimeout(() => { sendToGraveyard(newCard, 'player'); }, 1000);
         }
     }
 
     handCardEl.remove(); selectedHandCard = null;
     actionMenu.classList.remove('active');
-    
+
     if (cardData.category === 'monster') {
         log(`${action === 'summon' ? 'Summoned' : 'Set'}: ${cardData.name}`);
     }
 }
 
 // --- CLICK LISTENER ---
-document.body.addEventListener('click', function(e) {
+document.body.addEventListener('click', function (e) {
     if (gameState.gameOver) return;
 
     if (tributeState.isActive) {
@@ -788,7 +946,15 @@ document.body.addEventListener('click', function(e) {
     }
 
     if (spellState.isTargeting) {
-        const target = e.target.closest('.card.face-up, .card.face-down'); 
+        const target = e.target.closest('.card.face-up, .card.face-down');
+
+        // 1. If clicking the SOURCE card -> CANCEL
+        if (target && target === spellState.sourceCard) {
+            cancelSpellActivation(target);
+            e.stopPropagation(); return;
+        }
+
+        // 2. If valid target -> RESOLVE
         if (target) {
             const targetIsMonster = target.getAttribute('data-card-category') === 'monster';
             const targetIsSpell = target.getAttribute('data-card-category') === 'spell';
@@ -796,8 +962,19 @@ document.body.addEventListener('click', function(e) {
                 (spellState.targetType === 'spell' && targetIsSpell)) {
                 resolveSpellTarget(target); e.stopPropagation(); return;
             }
+            // If card but invalid type
+            log("Invalid Target. Please select a valid target or click the activating card to cancel.");
+            e.stopPropagation(); return;
         }
-        if (!e.target.closest('.action-menu')) { spellState.isTargeting = false; spellState.sourceCard = null; clearHighlights(); log("Spell activation cancelled."); }
+
+        // 3. If clicking empty space (and not menu) -> IGNORE (Keep Targeting)
+        if (!e.target.closest('.action-menu')) {
+            // Do NOTHING. Just log hint.
+            // log("Targeting... click valid target or source card to cancel.");
+            e.stopPropagation();
+            return;
+        }
+        // If menu click, allow it? Probably shouldn't happen during targeting usually.
     }
 
     if (battleState.isAttacking && battleState.attackerCard) {
@@ -808,7 +985,7 @@ document.body.addEventListener('click', function(e) {
         if (!e.target.closest('.action-menu')) { cancelBattleMode(); }
     }
 
-    const target = e.target.closest('.card, .hand-card'); 
+    const target = e.target.closest('.card, .hand-card');
     if (target) {
         updateSidebar(target);
         const rect = target.getBoundingClientRect();
@@ -834,7 +1011,7 @@ document.body.addEventListener('click', function(e) {
                 }
                 if (menuHtml) { actionMenu.innerHTML = menuHtml; showMenu(rect); e.stopPropagation(); }
             }
-        } 
+        }
         else if (target.parentElement.classList.contains('player-zone')) {
             selectedFieldCard = target;
             let menuHtml = '';
@@ -843,7 +1020,7 @@ document.body.addEventListener('click', function(e) {
             const isFaceDown = target.classList.contains('face-down');
             const cardTurn = parseInt(target.getAttribute('data-turn'));
             const lastChange = parseInt(target.getAttribute('data-last-pos-change') || 0);
-            
+
             if (currentPhase === 'BP' && isPlayerTurn && isMonster && isFaceUp && target.classList.contains('pos-atk')) {
                 const hasAttacked = target.getAttribute('data-attacked') === 'true';
                 if (!hasAttacked && turnCount > 1) { menuHtml = `<button class="action-btn battle-option" onclick="initiateAttack()">Attack</button>`; }
@@ -856,39 +1033,87 @@ document.body.addEventListener('click', function(e) {
                         if (cardTurn !== turnCount) { menuHtml = `<button class="action-btn" onclick="flipSummon()">Flip Summon</button>`; }
                     }
                 } else {
-                    if (isFaceDown) { menuHtml = `<button class="action-btn" onclick="activateSetCard()">Activate</button>`; }
+                    // Logic for Set Spells/Traps
+                    if (isFaceDown) {
+                        // Updated Visibility Check
+                        const type = target.getAttribute('data-type');
+                        const setTurn = parseInt(target.getAttribute('data-turn'));
+                        const isTrap = type.includes('Trap');
+                        const isQP = type.includes('Quick-Play');
+
+                        let canActivate = true;
+
+                        // 1. Trap/QP Delay check
+                        if ((isTrap || isQP) && setTurn === turnCount) canActivate = false;
+
+                        // 2. Normal Spell Phase check
+                        if (!isTrap && !isQP && currentPhase !== 'MP1' && currentPhase !== 'MP2') canActivate = false;
+
+                        if (canActivate) {
+                            menuHtml = `<button class="action-btn" onclick="activateSetCard()">Activate</button>`;
+                        }
+                    }
                 }
             }
             if (menuHtml) { actionMenu.innerHTML = menuHtml; showMenu(rect); e.stopPropagation(); }
         }
     } else {
-        if(!e.target.closest('.action-menu') && !e.target.closest('.phase-content')) {
+        if (!e.target.closest('.action-menu') && !e.target.closest('.phase-content')) {
             actionMenu.classList.remove('active'); phaseMenu.classList.remove('active');
         }
     }
 });
 
-function activateSetCard() {
-    if (!selectedFieldCard) return;
-    if (currentPhase !== 'MP1' && currentPhase !== 'MP2') { alert("Action only allowed in Main Phase!"); actionMenu.classList.remove('active'); return; }
-    
-    selectedFieldCard.classList.remove('face-down'); selectedFieldCard.classList.add('face-up');
-    const imgUrl = selectedFieldCard.getAttribute('data-img');
-    selectedFieldCard.style.backgroundImage = `url('${imgUrl}')`;
-    const cardName = selectedFieldCard.getAttribute('data-name');
+function activateSetCard(cardOverride = null, force = false) {
+    const cardEl = cardOverride || selectedFieldCard;
+    if (!cardEl) return;
+
+    // Manual Activation Logic (Force = true bypasses checks, used by Opponent Turn response)
+    if (!force) {
+        const type = cardEl.getAttribute('data-type');
+        const setTurn = parseInt(cardEl.getAttribute('data-turn'));
+
+        const isTrap = type.includes('Trap');
+        const isQP = type.includes('Quick-Play');
+
+        // RULE: Trap/QP cannot act if setTurn == currentTurn (in Player's Turn)
+        // Note: Logic allows (!isPlayerTurn && setTurn === turnCount) implicitly because this block is for Manual Player Activation
+        // which usually happens during isPlayerTurn. 
+        // If checking strictly:
+        if ((isTrap || isQP) && setTurn === turnCount && isPlayerTurn) {
+            alert("Cannot activate Traps/Quick-Play Spells the turn they are set!");
+            actionMenu.classList.remove('active');
+            return;
+        }
+
+        // RULE: Normal Spells must be in MP1/MP2
+        if (currentPhase !== 'MP1' && currentPhase !== 'MP2' && !isTrap && !isQP) {
+            alert("Normal Spells can only be activated in Main Phase!");
+            actionMenu.classList.remove('active');
+            return;
+        }
+    }
+
+    // EXECUTE ACTIVATION
+    cardEl.classList.remove('face-down'); cardEl.classList.add('face-up');
+    const imgUrl = cardEl.getAttribute('data-img');
+    cardEl.style.backgroundImage = `url('${imgUrl}')`;
+    const cardName = cardEl.getAttribute('data-name');
     log(`Activated Set Card: ${cardName}`);
 
     let finished = true;
-    if(cardEffects[cardName] && typeof cardEffects[cardName] === 'function') { finished = cardEffects[cardName](selectedFieldCard); }
-    else if(cardEffects[cardName] && cardEffects[cardName].type === 'Continuous') { finished = false; updateContinuousEffects(); }
+    if (cardEffects[cardName] && typeof cardEffects[cardName] === 'function') { finished = cardEffects[cardName](cardEl); }
+    else if (cardEffects[cardName] && cardEffects[cardName].type === 'Continuous') { finished = false; updateContinuousEffects(); }
 
-    const typeStr = selectedFieldCard.getAttribute('data-type') || "";
-    const raceStr = selectedFieldCard.getAttribute('data-race') || "";
+    const typeStr = cardEl.getAttribute('data-type') || "";
+    const raceStr = cardEl.getAttribute('data-race') || "";
     const isEquip = raceStr === 'Equip' || typeStr.includes('Equip');
     const isCont = raceStr === 'Continuous' || typeStr.includes('Continuous');
 
     if (!isEquip && !isCont && finished) {
-        setTimeout(() => { sendToGraveyard(selectedFieldCard, 'player'); }, 1000);
+        setTimeout(() => { sendToGraveyard(cardEl, 'player'); }, 1000);
+        // If finished immediately (no targeting), resume opponent turn if we are in one!
+        if (!isPlayerTurn && gameState.pendingOpponentAction) resumeOpponentTurn();
     }
     actionMenu.classList.remove('active');
 }
@@ -905,9 +1130,9 @@ function initiateAttack() {
     battleState.isAttacking = true;
     battleState.attackerCard = selectedFieldCard;
     log(`Battle: ${selectedFieldCard.getAttribute('data-name')} is attacking... Select a target.`);
-    
+
     const oppMonsters = document.querySelectorAll('.opp-zone.monster-zone .card');
-    if (oppMonsters.length > 0) { oppMonsters.forEach(el => el.parentElement.classList.add('targetable')); } 
+    if (oppMonsters.length > 0) { oppMonsters.forEach(el => el.parentElement.classList.add('targetable')); }
     else { document.getElementById('oppAvatarContainer').classList.add('targetable'); }
     actionMenu.classList.remove('active');
 }
@@ -927,7 +1152,7 @@ function resolveAttack(attacker, target) {
         log("Opponent monster flipped face-up!");
         target.classList.remove('face-down'); target.classList.add('face-up');
         target.style.backgroundImage = `url('${target.getAttribute('data-img')}')`;
-        if(!target.querySelector('.stats-bar')) {
+        if (!target.querySelector('.stats-bar')) {
             target.innerHTML = `<div class="stats-bar"><span class="stat-val stat-atk">${targetAtk}</span><span class="stat-val stat-def">${targetDef}</span></div>`;
         }
     }
@@ -995,7 +1220,7 @@ const phaseMenu = document.getElementById('phaseMenu');
 const phaseBtn = document.getElementById('phaseBtn');
 const phaseText = document.getElementById('phaseText');
 
-function togglePhaseMenu() { if(isPlayerTurn && currentPhase !== 'DP' && currentPhase !== 'SP') { updatePhaseMenuState(); phaseMenu.classList.toggle('active'); } }
+function togglePhaseMenu() { if (isPlayerTurn && currentPhase !== 'DP' && currentPhase !== 'SP') { updatePhaseMenuState(); phaseMenu.classList.toggle('active'); } }
 
 function updatePhaseMenuState() {
     const phases = ['MP1', 'BP', 'MP2', 'EP'];
@@ -1012,7 +1237,7 @@ function updatePhaseMenuState() {
 }
 
 function showMenu(rect) {
-    let menuTop = rect.top - 50; if(menuTop < 0) menuTop = 20;
+    let menuTop = rect.top - 50; if (menuTop < 0) menuTop = 20;
     actionMenu.style.left = `${rect.left + 20}px`; actionMenu.style.top = `${menuTop}px`;
     actionMenu.classList.add('active');
 }
@@ -1031,11 +1256,11 @@ function changeBattlePosition() {
 
     if (selectedFieldCard.classList.contains('pos-atk')) {
         selectedFieldCard.classList.remove('pos-atk'); selectedFieldCard.classList.add('pos-def');
-        if(selectedFieldCard.innerHTML.trim() === "") selectedFieldCard.innerHTML = statsHTML;
+        if (selectedFieldCard.innerHTML.trim() === "") selectedFieldCard.innerHTML = statsHTML;
         log(`Changed ${selectedFieldCard.getAttribute('data-name')} to Defense.`);
     } else {
         selectedFieldCard.classList.remove('pos-def'); selectedFieldCard.classList.add('pos-atk');
-        if(selectedFieldCard.innerHTML.trim() === "") selectedFieldCard.innerHTML = statsHTML;
+        if (selectedFieldCard.innerHTML.trim() === "") selectedFieldCard.innerHTML = statsHTML;
         log(`Changed ${selectedFieldCard.getAttribute('data-name')} to Attack.`);
     }
     selectedFieldCard.setAttribute('data-last-pos-change', turnCount);
@@ -1070,7 +1295,7 @@ function openList(title, data) {
     data.forEach(card => {
         const el = document.createElement('div'); el.className = 'list-card';
         let imgUrl = card.img || ''; el.style.backgroundImage = `url('${imgUrl}')`;
-        for(let k in card) el.setAttribute('data-'+k, card[k]);
+        for (let k in card) el.setAttribute('data-' + k, card[k]);
         el.addEventListener('click', (e) => { e.stopPropagation(); updateSidebar(el); });
         listGrid.appendChild(el);
     });
@@ -1093,11 +1318,11 @@ let detailLevel = document.getElementById('detailLevel');
 let detailAttrIcon = document.getElementById('detailAttrIcon');
 
 function updateSidebar(el) {
-    detailName.textContent = el.getAttribute('data-name'); 
+    detailName.textContent = el.getAttribute('data-name');
     detailType.textContent = el.getAttribute('data-type');
-    detailAtk.textContent = el.getAttribute('data-atk'); 
+    detailAtk.textContent = el.getAttribute('data-atk');
     detailDef.textContent = el.getAttribute('data-def');
-    detailDesc.textContent = el.getAttribute('data-desc'); 
+    detailDesc.textContent = el.getAttribute('data-desc');
     detailImg.style.backgroundImage = `url('${el.getAttribute('data-img')}')`;
     detailImg.classList.remove('empty');
 
@@ -1109,7 +1334,7 @@ function updateSidebar(el) {
 
     const attr = el.getAttribute('data-attribute');
     if (attr && attr !== 'undefined' && attr !== '') {
-        detailAttrIcon.textContent = attr.substring(0, 1); 
+        detailAttrIcon.textContent = attr.substring(0, 1);
         detailAttrIcon.className = `attr-icon attr-${attr}`;
         detailAttrIcon.style.display = 'inline-block';
     } else { detailAttrIcon.style.display = 'none'; }

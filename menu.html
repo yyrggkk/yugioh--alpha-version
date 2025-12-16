@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yu-Gi-Oh! WEB DUEL - Large Menu</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&display=swap" rel="stylesheet">
+    <style>
+        /* RESET */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: #000;
+            font-family: 'Cinzel', serif; /* Police style antique */
+            height: 100vh;
+            width: 100vw;
+            overflow: hidden; /* Empêche le défilement */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* CONTENEUR PRINCIPAL (L'écran de jeu) */
+        .game-interface {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            /* Image de fond : Hiéroglyphes bleus / Circuit. 
+               Remplacez l'URL par votre image de fond 'tech-egyptian' */
+            background: 
+                linear-gradient(rgba(0, 10, 40, 0.6), rgba(0, 10, 40, 0.6)),
+                url('https://i.imgur.com/5s4gCgM.jpg'); 
+            background-size: cover;
+            background-position: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            border: 8px solid #cfa55d; /* Bordure dorée extérieure */
+            box-shadow: inset 0 0 50px #000;
+        }
+
+        /* --- HEADER (Logo & Monstre) --- */
+        .header-bar {
+            width: 100%;
+            height: 18vh; /* 18% de la hauteur de l'écran */
+            display: flex;
+            justify-content: center;
+            align-items: flex-end; /* Aligner vers le bas */
+            position: relative;
+            background: linear-gradient(to bottom, #1a2530, #0d1218);
+            border-bottom: 4px solid #cfa55d;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.8);
+            z-index: 10;
+        }
+
+        /* Le Cercle du Monstre (Kuriboh) */
+        .monster-circle {
+            position: absolute;
+            left: 30px;
+            top: 20px;
+            width: 160px; /* Beaucoup plus grand */
+            height: 160px;
+            border-radius: 50%;
+            background: #0d1218;
+            border: 5px solid #cfa55d;
+            box-shadow: 0 0 20px #cfa55d;
+            overflow: hidden;
+            z-index: 20;
+        }
+
+        .monster-circle img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        /* Logo Central */
+        .game-logo {
+            margin-bottom: -20px; /* Chevauchement léger */
+        }
+        
+        .game-logo img {
+            height: 140px; /* Logo plus grand */
+            filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.5));
+        }
+
+        /* --- ZONE DES BOUTONS --- */
+        .menu-area {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 30px; /* Espace entre les boutons */
+            width: 100%;
+        }
+
+        /* Style des boutons "Carte" */
+        .duel-btn {
+            position: relative;
+            width: 600px; /* Largeur fixe massive ou utiliser 40% */
+            max-width: 90%;
+            padding: 25px 0;
+            background: linear-gradient(180deg, #0a1525 0%, #03060a 100%);
+            border: 3px solid #b8860b; /* Dark Goldenrod */
+            border-radius: 8px;
+            color: #fff8dc; /* Cornsilk text */
+            font-size: 3rem; /* Police TRÈS GRANDE */
+            text-align: center;
+            text-decoration: none;
+            text-transform: uppercase;
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+            box-shadow: 
+                0 0 0 2px #000, /* Bordure noire fine interne */
+                0 0 15px rgba(0, 191, 255, 0.3), /* Lueur bleue diffuse */
+                inset 0 0 20px rgba(0, 0, 0, 0.8);
+            transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+            cursor: pointer;
+        }
+
+        /* Effet "Néon bleu" autour du bouton comme sur l'image */
+        .duel-btn::before {
+            content: '';
+            position: absolute;
+            top: -6px; left: -6px; right: -6px; bottom: -6px;
+            border: 2px solid rgba(0, 255, 255, 0.3); /* Lignes tech bleues */
+            border-radius: 12px;
+            z-index: -1;
+            opacity: 0.6;
+        }
+
+        /* Survol (Hover) */
+        .duel-btn:hover {
+            background: linear-gradient(180deg, #152a45 0%, #0a1525 100%);
+            transform: scale(1.05); /* Agrandissement */
+            border-color: #ffd700; /* Or brillant */
+            color: #fff;
+            box-shadow: 
+                0 0 30px rgba(0, 191, 255, 0.6),
+                inset 0 0 10px rgba(255, 215, 0, 0.2);
+        }
+
+        .duel-btn span {
+            /* Petit effet dégradé sur le texte si supporté */
+            background: -webkit-linear-gradient(#fff, #e0cda8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* --- PETITE ÉTOILE EN BAS --- */
+        .star-decoration {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 2rem;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="game-interface">
+        
+        <div class="header-bar">
+            <div class="monster-circle">
+                <img src="https://upload.wikimedia.org/wikipedia/en/thumb/2/2b/YugiMutou.jpg/220px-YugiMutou.jpg" alt="Avatar"> 
+                </div>
+
+            <div class="game-logo">
+                <img src="https://upload.wikimedia.org/wikipedia/commons/2/21/Yu-Gi-Oh%21.png" alt="Yu-Gi-Oh! Web Duel">
+            </div>
+        </div>
+
+        <nav class="menu-area">
+            <a href="#" class="duel-btn"><span>Play</span></a>
+            <a href="#" class="duel-btn"><span>Deck Builder</span></a>
+            <a href="#" class="duel-btn"><span>Settings</span></a>
+            <a href="#" class="duel-btn"><span>Donation</span></a>
+        </nav>
+
+
+</body>
+</html>
