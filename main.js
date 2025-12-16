@@ -496,10 +496,11 @@ const phaseOrder = ['DP', 'SP', 'MP1', 'BP', 'MP2', 'EP'];
 // gameState definition removed (duplicate)
 
 // --- NEW: RESPONSE / CHAIN SYSTEM ---
+let selectedChainCard = null; // Track selection
+
 function checkResponseWindow(nextActionCallback) {
     if (gameState.gameOver) return;
 
-    // RULE: Same logic as before
     const setCards = document.querySelectorAll('.spell-trap-zone .card.face-down');
     let candidates = [];
 
@@ -521,52 +522,56 @@ function checkResponseWindow(nextActionCallback) {
     if (candidates.length > 0) {
         // Pause and Show Modal
         gameState.pendingOpponentAction = nextActionCallback;
+        const modal = document.getElementById('activationModal');
+        const list = document.getElementById('activationList');
+        const text = document.getElementById('activationText'); // e.g. "Opponent Phase..."
 
-        // Use existing List Modal
-        const listModal = document.getElementById('listModal');
-        const listGrid = document.getElementById('listGrid');
-        const listTitle = document.getElementById('listTitle');
+        text.textContent = `Opponent Phase: ${currentPhase}. Activate a card?`;
+        list.innerHTML = '';
+        selectedChainCard = null; // Reset selection
 
-        listTitle.textContent = `Opponent Phase: ${currentPhase}. Activate a card?`;
-        listGrid.innerHTML = '';
-
-        // Add "Pass / Cancel" Button (Styled as a card or special button)
-        const passBtn = document.createElement('div');
-        passBtn.className = 'list-card';
-        passBtn.style.display = 'flex'; passBtn.style.alignItems = 'center'; passBtn.style.justifyContent = 'center';
-        passBtn.style.border = '2px dashed #888'; passBtn.style.backgroundColor = '#333';
-        passBtn.textContent = 'PASS (Do Nothing)';
-        passBtn.onclick = function (e) {
-            e.stopPropagation();
-            resumeOpponentTurn();
-            listModal.classList.remove('active');
-        };
-        listGrid.appendChild(passBtn);
-
-        // Add Candidates
+        // Render Candidates
         candidates.forEach(cand => {
             const el = document.createElement('div');
-            el.className = 'list-card';
+            el.className = 'chain-card-item';
             el.style.backgroundImage = `url('${cand.img}')`;
+
             el.onclick = function (e) {
                 e.stopPropagation();
-                listModal.classList.remove('active');
-                // Activate logic
-                activateSetCard(cand.el, true);
-                // Note: activateSetCard checks if effect is finished.
-                // If it needs targeting, it returns false, so we DON'T resume yet.
-                // If it finishes immediately (Just Desserts), we might need to resume manually?
-                // activateSetCard -> finishes? -> check card effect return?
-                // `activateSetCard` logic needs a tweak to know if it finished to resume.
+                // Deselect others
+                document.querySelectorAll('.chain-card-item').forEach(c => c.classList.remove('selected'));
+                // Select this
+                el.classList.add('selected');
+                selectedChainCard = cand;
             };
-            listGrid.appendChild(el);
+            list.appendChild(el);
         });
 
-        listModal.classList.add('active');
+        modal.classList.add('active');
     } else {
         // No candidates, proceed immediately
         setTimeout(nextActionCallback, 500);
     }
+}
+
+function cancelActivation() {
+    const modal = document.getElementById('activationModal');
+    modal.classList.remove('active');
+    selectedChainCard = null;
+    resumeOpponentTurn();
+}
+
+function confirmActivation() {
+    if (!selectedChainCard) {
+        alert("Please select a card to activate.");
+        return;
+    }
+    const modal = document.getElementById('activationModal');
+    modal.classList.remove('active');
+
+    // Activate logic
+    activateSetCard(selectedChainCard.el, true);
+    selectedChainCard = null;
 }
 
 function resumeOpponentTurn() {

@@ -171,6 +171,184 @@
         </div>
     </div>
 
+    <!-- NEW: Activation Modal (Master Duel Style) -->
+    <div id="activationModal" class="activation-modal">
+        <div class="scanlines"></div>
+        <div class="activation-content">
+            <div class="activation-header">
+                <div class="chain-icon"></div>
+                <div class="activation-text" id="activationText">
+                    "Reinforcement of the Army" is activated. Chain another card or effect?
+                </div>
+                <div class="phase-icon"></div>
+            </div>
+            
+            <div class="activation-card-list" id="activationList">
+                <!-- Cards injected here -->
+            </div>
+
+            <div class="activation-footer">
+                <div class="md-btn cancel" onclick="cancelActivation()">
+                    <span class="btn-text">Cancel</span>
+                    <div class="btn-glow"></div>
+                </div>
+                <div class="md-btn confirm" onclick="confirmActivation()">
+                    <span class="btn-text">Activate Effect</span>
+                    <div class="btn-glow"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        /* --- Activation Modal Styles --- */
+        .activation-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.6); /* Dimmed background */
+            z-index: 800;
+            display: none;
+            justify-content: center; align-items: center;
+            font-family: 'Roboto', sans-serif;
+        }
+        .activation-modal.active { display: flex; }
+
+        .activation-content {
+            width: 800px;
+            background: linear-gradient(180deg, rgba(10,15,20,0.95) 0%, rgba(5,10,15,0.98) 100%);
+            border: 1px solid #444;
+            box-shadow: 0 0 50px rgba(0,0,0,0.8), inset 0 0 100px rgba(0,0,0,0.5);
+            display: flex; flex-direction: column; align-items: center;
+            padding: 0;
+            position: relative;
+            overflow: hidden;
+            border-radius: 4px;
+        }
+
+        /* Scanlines Effect */
+        .scanlines {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.2));
+            background-size: 100% 4px;
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        .activation-header {
+            width: 100%;
+            padding: 20px 40px;
+            display: flex; justify-content: space-between; align-items: center;
+            z-index: 2;
+        }
+        .activation-text {
+            color: #dcb; /* Warm off-white text */
+            font-size: 16px;
+            text-align: center;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+            line-height: 1.4;
+            flex: 1; margin: 0 20px;
+        }
+        
+        .activation-card-list {
+            margin: 20px 0;
+            display: flex; gap: 20px;
+            justify-content: center;
+            z-index: 2;
+            min-height: 160px;
+        }
+        
+        /* Card Item in List */
+        .chain-card-item {
+            width: 100px; height: 145px;
+            background-size: cover; background-position: center;
+            border-radius: 4px;
+            border: 2px solid #555;
+            transition: all 0.2s;
+            cursor: pointer;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+            position: relative;
+        }
+        .chain-card-item:hover { transform: translateY(-5px); border-color: #aaa; }
+        .chain-card-item.selected {
+            border-color: #00d4ff;
+            box-shadow: 0 0 20px rgba(0, 212, 255, 0.6);
+            transform: scale(1.05);
+        }
+        /* Selection Frame Mockup */
+        .chain-card-item.selected::after {
+            content: ''; position: absolute; top: -5px; left: -5px; right: -5px; bottom: -5px;
+            border: 1px solid rgba(0, 212, 255, 0.4);
+            border-radius: 6px;
+            pointer-events: none;
+        }
+
+        .activation-footer {
+            width: 100%;
+            display: flex; justify-content: space-between;
+            padding: 20px 60px 30px 60px;
+            z-index: 2;
+        }
+
+        /* Master Duel Style Buttons */
+        .md-btn {
+            position: relative;
+            width: 200px; height: 50px;
+            background: #000;
+            cursor: pointer;
+            display: flex; justify-content: center; align-items: center;
+            /* Chamfered Edges using clip-path */
+            clip-path: polygon(
+                15px 0, 100% 0, 
+                100% calc(100% - 15px), calc(100% - 15px) 100%, 
+                0 100%, 0 15px
+            );
+            transition: all 0.2s;
+        }
+        
+        .md-btn::before {
+            content: ''; position: absolute; top: 2px; left: 2px; right: 2px; bottom: 2px;
+            background: #111;
+            clip-path: polygon(
+                13px 0, 100% 0, 
+                100% calc(100% - 13px), calc(100% - 13px) 100%, 
+                0 100%, 0 13px
+            );
+            z-index: 1;
+        }
+        
+        .md-btn:hover { filter: brightness(1.2); transform: scale(1.02); }
+        .md-btn:active { transform: scale(0.98); }
+
+        .btn-text {
+            position: relative; z-index: 3;
+            font-family: 'Orbitron', sans-serif;
+            font-weight: bold; font-size: 14px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        /* Cancel Button (Yellow/Black) */
+        .md-btn.cancel { background: #aa8800; }
+        .md-btn.cancel .btn-text { color: #ffe600; }
+        .md-btn.cancel::before { background: linear-gradient(180deg, #332200, #110000); }
+        .cancel .btn-glow {
+            position: absolute; top: 0; left: 0; width: 20px; height: 100%;
+            background: #ffe600; z-index: 2; opacity: 0.8;
+            clip-path: polygon(0 0, 100% 0, 0 100%);
+        }
+
+        /* Confirm Button (Blue/Black) */
+        .md-btn.confirm { background: #005577; }
+        .md-btn.confirm .btn-text { color: #00d4ff; text-shadow: 0 0 5px rgba(0,212,255,0.5); }
+        .md-btn.confirm::before { background: linear-gradient(180deg, #001122, #000510); }
+        
+        /* Blue Corner accent */
+        .confirm .btn-glow {
+            position: absolute; bottom: 0; right: 0; width: 20px; height: 100%;
+            background: #00d4ff; z-index: 2; opacity: 0.8;
+            clip-path: polygon(100% 0, 100% 100%, 0 100%);
+        }
+    </style>
+
     <div id="actionMenu" class="action-menu"></div>
 
     <div class="hud-layer">
