@@ -150,6 +150,7 @@ function updateGYVisual(elementId, imgUrl) {
 
 const ChainManager = {
     stack: [],
+    pendingGraveyardQueue: [],
     isResolving: false,
 
     addLink: function (card, effectFn, player) {
@@ -199,31 +200,25 @@ const ChainManager = {
 
     findCandidates: function (player) {
         const zoneSelector = (player === 'player') ? '.player-zone' : '.opp-zone';
-        const setCards = document.querySelectorAll(`${zoneSelector}.spell-trap-zone .card.face-down, ${zoneSelector} .hand-card`); // check hand response too?
-        // Simplification: Check Set Spells/Traps only for now (like original code)
-        // But original code checked ALL set cards. We should be specific.
+
+        // Check Hand (Quick-Plays allowed from hand if Turn Player)
+        // Check Field (Set Cards)
+        const sources = [
+            ...document.querySelectorAll(`${zoneSelector}.spell-trap-zone .card.face-down`),
+            ...document.querySelectorAll(`${zoneSelector} .hand-card`)
+        ];
 
         const validCards = [];
 
-        // CHECK SET CARDS
-        const setSpells = document.querySelectorAll(`${zoneSelector}.spell-trap-zone .card.face-down`);
-        setSpells.forEach(c => {
-            const setTurn = parseInt(c.getAttribute('data-turn'));
-            const type = c.getAttribute('data-type');
-            const isTrap = type.includes('Trap');
-            const isQP = type.includes('Quick-Play');
-
-            // Logic: Traps/QP can act if not set this turn (or if strict rules met)
-            // Note: Simplification from original code
-            const canActivate = (setTurn < turnCount) || (!isPlayerTurn && setTurn === turnCount);
-            if (isTrap || isQP) {
-                if (canActivate) {
-                    validCards.push({ el: c, name: c.getAttribute('data-name'), img: c.getAttribute('data-img'), source: 'field' });
-                }
+        sources.forEach(c => {
+            // "isChainLink1" is FALSE because we are finding COMPATIBLE responses to a chain
+            // Wait, if chain stack is 0, it IS ChainLink 1? 
+            // "promptResponse" is called AFTER addLink, so stack is > 0.
+            // So isChainLink1 = false.
+            if (validateActivation(c, false)) {
+                validCards.push({ el: c, name: c.getAttribute('data-name'), img: c.getAttribute('data-img'), source: 'field' });
             }
         });
-
-        // TODO: Check Hand Quick-Play Spells (if implemented)
 
         return validCards;
     },
@@ -232,6 +227,17 @@ const ChainManager = {
         if (this.stack.length === 0) {
             log("Chain Resolved.");
             this.isResolving = false;
+
+            // --- NEW: Process Pending Graveyard Queue ---
+            if (this.pendingGraveyardQueue && this.pendingGraveyardQueue.length > 0) {
+                log(`Processing Pending GY Queue: ${this.pendingGraveyardQueue.length} cards.`);
+                this.pendingGraveyardQueue.forEach(item => {
+                    sendToGraveyard(item.card, item.owner);
+                });
+                this.pendingGraveyardQueue = [];
+            }
+            // --------------------------------------------
+
             // Clean up global state if needed...
             if (!isPlayerTurn && gameState.pendingOpponentAction) resumeOpponentTurn();
             return;
@@ -261,6 +267,22 @@ const ChainManager = {
             this.isPaused = true;
             return;
         }
+
+        // --- NEW: Add to Pending Queue ---
+        const typeStr = card.getAttribute('data-type') || "";
+        const raceStr = card.getAttribute('data-race') || "";
+        const isEquip = raceStr === 'Equip' || typeStr.includes('Equip');
+        const isCont = raceStr === 'Continuous' || typeStr.includes('Continuous');
+        const isField = raceStr === 'Field' || typeStr.includes('Field');
+
+        if (result === true && !isEquip && !isCont && !isField) {
+            const owner = getOwner(card);
+            // Ensure queue exists
+            if (!this.pendingGraveyardQueue) this.pendingGraveyardQueue = [];
+
+            this.pendingGraveyardQueue.push({ card: card, owner: owner });
+        }
+        // ---------------------------------
 
         // Otherwise continue after delay
         setTimeout(() => {
@@ -302,10 +324,13 @@ const ChainManager = {
 
     // NEW: Check if Player wants to activate something at start of Phase/Step
     checkPhaseResponse: function (player, onContinue) {
+        log(`Checking Phase Response for ${player} in ${currentPhase}...`);
         // If checking for Player, we look for Player's cards
         const candidates = this.findCandidates(player);
+        log(`Candidates found: ${candidates.length}`);
 
         if (candidates.length > 0) {
+            log("Opening Phase Response Modal...");
             gameState.pendingOpponentAction = onContinue;
 
             // Re-use modal but slightly different context text
@@ -332,6 +357,7 @@ const ChainManager = {
 
             // On Cancel: Just resume
             window._currentCancelCallback = () => {
+                log("Phase Response Cancelled. Resuming...");
                 resumeOpponentTurn();
             };
 
@@ -997,6 +1023,71 @@ function proceedToMainPhase() {
     }, 1500);
 }
 
+// --- NEW: Centralized Activation Validation ---
+function validateActivation(card, isChainLink1 = true) {
+    if (!card) return false;
+    if (ChainManager.isResolving) return false;
+
+    const type = card.getAttribute('data-type') || "";
+    const speed = parseInt(card.getAttribute('data-speed') || "1");
+    const setTurn = parseInt(card.getAttribute('data-set-turn') || "-1");
+    // const isSet = card.classList.contains('face-down'); // Not strictly needed if data-set-turn is reliable
+
+    // 0. LOCATION RESTRICTIONS
+    const isHand = card.parentElement && card.parentElement.classList.contains('hand-container');
+    const isTrap = type.includes('Trap');
+    const isQuickPlay = type.includes('Quick-Play');
+
+    // Rule: Traps cannot activate from Hand (unless specifically implied by effect, which we act as if doesn't exist for generic engine yet)
+    // Rule: Quick-Play Spells can activate from Hand during YOUR turn, but NOT Opponent's turn.
+    if (isHand) {
+        if (isTrap) {
+            // log("Failed Hand Trap Rule: Cannot activate Trap from Hand.");
+            return false;
+        }
+        if (isQuickPlay && !isPlayerTurn) {
+            // log("Failed Quick-Play Hand Rule: Cannot activate QP from Hand on Opponent Turn.");
+            return false;
+        }
+        // Normal Spells from Hand are handled by Phase Rules (Speed 1)
+    }
+
+    // 1. SET RESTRICTIONS (Traps & Quick-Plays cannot activate turn they are Set)
+    if (setTurn === turnCount) {
+        // Technically strict rule: ANY card set cannot be activated same turn, 
+        // except Spells (Normal/Equip/Cont/Field) which can be used same turn if Speed 1.
+        // But QPs and Traps are Speed 2/3.
+        if (speed >= 2) return false;
+    }
+
+    // 2. CHAIN LINK RULES
+    if (!isChainLink1) {
+        // Rule: Spell Speed 1 cannot be CL 2+, EXCEPT for SEGOC (Simultaneous Triggers).
+        // Since this engine currently handles sequential responses (Fast Effect Timing),
+        // we strictly block Speed 1 here to prevent Normal Spells from chaining.
+        if (speed === 1) return false;
+
+        // Check against previous Link
+        const stack = ChainManager.stack;
+        if (stack.length > 0) {
+            const lastLinkCard = stack[stack.length - 1].card;
+            const lastSpeed = parseInt(lastLinkCard.getAttribute('data-speed') || "1");
+            if (speed < lastSpeed) return false; // Rule: Cannot chain slower speed to higher
+        }
+    }
+
+    // 3. PHASE RULES (Speed 1 only in Main Phases)
+    if (speed === 1) {
+        if (!isPlayerTurn) {
+            log(`Failed Speed 1 Rule: Not Player Turn.`);
+            return false; // Speed 1 only in own turn
+        }
+        if (currentPhase !== 'MP1' && currentPhase !== 'MP2') return false;
+    }
+
+    return true;
+}
+
 function switchTurn() {
     if (gameState.gameOver) return;
 
@@ -1011,6 +1102,8 @@ function switchTurn() {
     }
 
     isPlayerTurn = !isPlayerTurn;
+    turnCount++; // FIX: Increment turn count on EVERY switch (T1, T2, T3...)
+
     document.getElementById('actionMenu').classList.remove('active');
     gameState.normalSummonUsed = false;
     document.querySelectorAll('.card').forEach(c => c.setAttribute('data-attacked', 'false'));
@@ -1021,14 +1114,13 @@ function switchTurn() {
     updateContinuousEffects();
 
     if (isPlayerTurn) {
-        turnCount++;
         document.getElementById('phaseText').classList.remove('opponent-turn');
         runNormalTurn();
     } else {
         document.getElementById('phaseText').classList.add('opponent-turn');
         setPhaseText('DP', "DRAW PHASE");
         if (oppDeckData.length === 0) { endDuel("You Won! Opponent Deck is empty."); return; }
-        log("Opponent's Turn");
+        log(`Opponent's Turn (Turn ${turnCount})`);
 
         // Start Opponent Flow
         setTimeout(oppDrawPhase, 1000);
@@ -1157,6 +1249,8 @@ function renderHandCard(card) {
     el.setAttribute('data-card-category', card.category);
     el.setAttribute('data-level', card.level); el.setAttribute('data-attribute', card.attribute);
     el.setAttribute('data-race', card.race);
+    el.setAttribute('data-speed', card.speed || 1);
+    el.setAttribute('data-sub-type', card.subType || 'Normal');
     handContainer.appendChild(el);
 }
 
@@ -1193,14 +1287,47 @@ function cancelTributeMode() {
     tributeState.isActive = false; tributeState.pendingCard = null; tributeState.currentTributes = []; tributeState.actionType = null;
 }
 
+// --- NEW: Special Summon Logic ---
+function performSpecialSummon(card, mechanism) {
+    if (!card) return;
+
+    if (mechanism === 'built-in') {
+        const name = card.getAttribute('data-name');
+
+        // CONDITIONS CHECK
+        if (name === 'Cyber Dragon') {
+            const oppMonsters = document.querySelectorAll('.opp-zone.monster-zone .card').length;
+            const playerMonsters = document.querySelectorAll('.player-zone.monster-zone .card').length;
+            if (oppMonsters === 0 || playerMonsters > 0) {
+                alert("Condition not met: Opponent must control a monster and you must control no monsters.");
+                actionMenu.classList.remove('active');
+                return;
+            }
+        }
+
+        // EXECUTE SUMMON (No Chain)
+        log(`Special Summoned ${name}!`);
+        executeCardPlay(card, 'special-summon'); // Reuse executeCardPlay for placement
+    }
+    // Effect summons handled by effect functions usually
+}
+
 function performAction(action) {
     if (!selectedHandCard) return;
 
-    const canActInMain = (currentPhase === 'MP1' || currentPhase === 'MP2');
-    const isQP = selectedHandCard.getAttribute('data-race') === 'Quick-Play';
-    const canActInBP = (currentPhase === 'BP' && isQP && action === 'activate');
+    if (action === 'special-summon') {
+        performSpecialSummon(selectedHandCard, 'built-in');
+        return;
+    }
 
-    if (!canActInMain && !canActInBP) { alert("Action not allowed in this Phase!"); actionMenu.classList.remove('active'); return; }
+    if (action === 'activate') {
+        const isLink1 = ChainManager.stack.length === 0;
+        if (!validateActivation(selectedHandCard, isLink1)) {
+            alert("Cannot activate this card at this time (Check Phase/Speed).");
+            actionMenu.classList.remove('active');
+            return;
+        }
+    }
 
     const isMonsterSummon = (action === 'summon') || (action === 'set' && selectedHandCard.getAttribute('data-card-category') === 'monster');
     if (isMonsterSummon && gameState.normalSummonUsed) { alert("Already used Normal Summon/Set this turn!"); actionMenu.classList.remove('active'); return; }
@@ -1245,8 +1372,8 @@ function executeCardPlay(handCardEl, action) {
         const zones = ['p-m1', 'p-m2', 'p-m3'];
         for (let id of zones) { if (document.getElementById(id).children.length === 0) { targetZone = document.getElementById(id); break; } }
         if (!targetZone) { alert("Monster Zones Full!"); return; }
-        cssClass = (action === 'summon') ? 'face-up pos-atk' : 'face-down pos-def';
-        gameState.normalSummonUsed = true;
+        cssClass = (action === 'summon' || action === 'special-summon') ? 'face-up pos-atk' : 'face-down pos-def';
+        if (action === 'summon' || action === 'set') gameState.normalSummonUsed = true;
     } else {
         const zones = ['p-s1', 'p-s2', 'p-s3'];
         for (let id of zones) { if (document.getElementById(id).children.length === 0) { targetZone = document.getElementById(id); break; } }
@@ -1267,6 +1394,16 @@ function executeCardPlay(handCardEl, action) {
     }
     newCard.setAttribute('data-original-atk', cardData.atk);
     newCard.setAttribute('data-original-def', cardData.def);
+
+    // Official Rules Logic
+    const subType = handCardEl.getAttribute('data-sub-type');
+    const speed = handCardEl.getAttribute('data-speed');
+    if (subType) newCard.setAttribute('data-sub-type', subType);
+    if (speed) newCard.setAttribute('data-speed', speed);
+
+    if (action === 'set') {
+        newCard.setAttribute('data-set-turn', turnCount);
+    }
 
     if (cssClass.includes('face-up')) {
         newCard.style.backgroundImage = `url('${cardData.img}')`;
@@ -1298,10 +1435,11 @@ function executeCardPlay(handCardEl, action) {
             const isCont = raceStr === 'Continuous' || typeStr.includes('Continuous');
 
             if (!isEquip && !isCont && finished) {
-                const owner = getOwner(newCard); // FIX: Use dynamic owner
-                setTimeout(() => { sendToGraveyard(newCard, owner); }, 1000);
+                // REMOVED: Immediate GY Send. Handled by ChainManager.resolve() / pendingGraveyardQueue
+                // const owner = getOwner(newCard); 
+                // setTimeout(() => { sendToGraveyard(newCard, owner); }, 1000);
             }
-            return finished; // FIX: Return status to ChainManager
+            return finished; // Return status to ChainManager
         };
 
         // Add to Chain (Player activating from Hand)
@@ -1383,9 +1521,23 @@ document.body.addEventListener('click', function (e) {
                 const cat = target.getAttribute('data-card-category');
                 let menuHtml = '';
                 if (cat === 'monster') {
-                    if (!gameState.normalSummonUsed && canActInMain) {
-                        menuHtml = `<button class="action-btn" onclick="performAction('summon')">Normal Summon</button>
-                                    <button class="action-btn" onclick="performAction('set')">Set</button>`;
+                    const summonLogic = target.getAttribute('data-summon-logic');
+
+                    // Logic for Built-in Special Summons (e.g. Cyber Dragon)
+                    if (summonLogic === 'built-in') {
+                        if (canActInMain) {
+                            menuHtml = `<button class="action-btn" onclick="performAction('special-summon')">Special Summon</button>`;
+                            if (!gameState.normalSummonUsed) {
+                                menuHtml += `<button class="action-btn" onclick="performAction('summon')">Normal Summon</button>`;
+                            }
+                            menuHtml += `<button class="action-btn" onclick="performAction('set')">Set</button>`;
+                        }
+                    } else {
+                        // Standard Normal Summon/Set
+                        if (!gameState.normalSummonUsed && canActInMain) {
+                            menuHtml = `<button class="action-btn" onclick="performAction('summon')">Normal Summon</button>
+                                        <button class="action-btn" onclick="performAction('set')">Set</button>`;
+                        }
                     }
                 } else {
                     menuHtml = `<button class="action-btn" onclick="performAction('activate')">Activate</button>
@@ -1451,27 +1603,23 @@ function activateSetCard(cardOverride = null, force = false) {
     if (!cardEl) return;
 
     // Manual Activation Logic (Force = true bypasses checks, used by Opponent Turn response)
+    // Manual Activation Logic (Force = true bypasses checks, used by Opponent Turn response)
     if (!force) {
-        const type = cardEl.getAttribute('data-type');
-        const setTurn = parseInt(cardEl.getAttribute('data-turn'));
+        // New Validation
+        // If Chain stack is empty, it is Chain Link 1.
+        // If responding to opponent via UI button, stack might not be empty?
+        // Actually, normal "Activate" button is for initiating. 
+        // Responses use the "checkPhaseResponse" or "ChainManager" UI which bypasses this or calls it with force=true?
+        // Let's check ChainManager.promptResponse calls openActivationModal. 
+        // openActivationModal onclick sets selectedChainCard. Does it call activateSetCard?
+        // No, current logic (Step 223 snippet) in openActivationModal onclick just selects card.
+        // Then `ChainManager.resolve()` happens.
+        // Wait, where is the card actually ACTIVATED in response?
+        // I need to ensure `force` is handled correctly or `validateActivation` receives correct `isChainLink1`.
 
-        const isTrap = type.includes('Trap');
-        const isQP = type.includes('Quick-Play');
-
-        // RULE: Trap/QP cannot act if setTurn == currentTurn (in Player's Turn)
-        // Note: Logic allows (!isPlayerTurn && setTurn === turnCount) implicitly because this block is for Manual Player Activation
-        // which usually happens during isPlayerTurn. 
-        // If checking strictly:
-        if ((isTrap || isQP) && setTurn === turnCount && isPlayerTurn) {
-            alert("Cannot activate Traps/Quick-Play Spells the turn they are set!");
-            actionMenu.classList.remove('active');
-            return;
-        }
-
-        // RULE: Normal Spells must be in MP1/MP2
-        if (currentPhase !== 'MP1' && currentPhase !== 'MP2' && !isTrap && !isQP) {
-            alert("Normal Spells can only be activated in Main Phase!");
-            actionMenu.classList.remove('active');
+        const isLink1 = ChainManager.stack.length === 0;
+        if (!validateActivation(cardEl, isLink1)) {
+            log("Activation conditions not met (Turn/Phase/Speed).");
             return;
         }
     }
@@ -1496,8 +1644,9 @@ function activateSetCard(cardOverride = null, force = false) {
         const isCont = raceStr === 'Continuous' || typeStr.includes('Continuous');
 
         if (!isEquip && !isCont && finished) {
-            const owner = getOwner(cardEl); // FIX: Use dynamic owner
-            setTimeout(() => { sendToGraveyard(cardEl, owner); }, 1000);
+            // REMOVED: Immediate GY Send. Handled by ChainManager pendingGraveyardQueue.
+            // const owner = getOwner(cardEl); 
+            // setTimeout(() => { sendToGraveyard(cardEl, owner); }, 1000);
         }
         return finished; // FIX: Return status to ChainManager
     };

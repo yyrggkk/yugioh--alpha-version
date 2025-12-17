@@ -96,86 +96,114 @@ $rawDB = [
     'raigeki' => [
         "id" => 12580477, "name" => "Raigeki", "type" => "Spell Card", "humanReadableCardType" => "Normal Spell", "frameType" => "spell", 
         "desc" => "Destroy all monsters your opponent controls.", "race" => "Normal", 
-        "image_url" => "https://images.ygoprodeck.com/images/cards/12580477.jpg"
+        "image_url" => "https://images.ygoprodeck.com/images/cards/12580477.jpg",
+        "subType" => "Normal", "speed" => 1
     ],
     'pot' => [
         "id" => 55144522, "name" => "Pot of Greed", "type" => "Spell Card", "humanReadableCardType" => "Normal Spell", "frameType" => "spell", 
         "desc" => "Draw 2 cards.", "race" => "Normal", 
-        "image_url" => "https://images.ygoprodeck.com/images/cards/55144522.jpg"
+        "image_url" => "https://images.ygoprodeck.com/images/cards/55144522.jpg",
+        "subType" => "Normal", "speed" => 1
     ],
     'monsterreborn' => [
         "id" => 83764718, "name" => "Monster Reborn", "type" => "Spell Card", "humanReadableCardType" => "Normal Spell", "frameType" => "spell", 
         "desc" => "Target 1 monster in either GY; Special Summon it.", "race" => "Normal", 
-        "image_url" => "https://images.ygoprodeck.com/images/cards/83764718.jpg"
+        "image_url" => "https://images.ygoprodeck.com/images/cards/83764718.jpg",
+        "subType" => "Normal", "speed" => 1
     ],
     'dianketo' => [
         "id" => 84257639, "name" => "Dian Keto the Cure Master", "type" => "Spell Card", "humanReadableCardType" => "Normal Spell", "frameType" => "spell", 
         "desc" => "Increase your Life Points by 1000 points.", "race" => "Normal", 
-        "image_url" => "https://images.ygoprodeck.com/images/cards/84257639.jpg"
+        "image_url" => "https://images.ygoprodeck.com/images/cards/84257639.jpg",
+        "subType" => "Normal", "speed" => 1
     ],
     'ookazi' => [
         "id" => 19523799, "name" => "Ookazi", "type" => "Spell Card", "humanReadableCardType" => "Normal Spell", "frameType" => "spell", 
         "desc" => "Inflict 800 damage to your opponent.", "race" => "Normal", 
-        "image_url" => "https://images.ygoprodeck.com/images/cards/19523799.jpg"
+        "image_url" => "https://images.ygoprodeck.com/images/cards/19523799.jpg",
+        "subType" => "Normal", "speed" => 1
+    ],
+    'hinotama' => [
+        "id" => 46130346, "name" => "Hinotama", "type" => "Spell Card", "humanReadableCardType" => "Normal Spell", "frameType" => "spell",
+        "desc" => "Inflict 500 damage to your opponent.", "race" => "Normal",
+        "image_url" => "https://images.ygoprodeck.com/images/cards/46130346.jpg",
+        "subType" => "Normal", "speed" => 1
     ],
     
     // Equip Spells
     'axeofdespair' => [
         "id" => 40619825, "name" => "Axe of Despair", "type" => "Spell Card", "humanReadableCardType" => "Equip Spell", "frameType" => "spell", 
         "desc" => "The equipped monster gains 1000 ATK.", "race" => "Equip", 
-        "image_url" => "https://images.ygoprodeck.com/images/cards/40619825.jpg"
+        "image_url" => "https://images.ygoprodeck.com/images/cards/40619825.jpg",
+        "subType" => "Equip", "speed" => 1
     ],
     'malevolentnuzzler' => [
         "id" => 99597615, "name" => "Malevolent Nuzzler", "type" => "Spell Card", "humanReadableCardType" => "Equip Spell", "frameType" => "spell", 
         "desc" => "The equipped monster gains 700 ATK.", "race" => "Equip", 
-        "image_url" => "https://images.ygoprodeck.com/images/cards/99597615.jpg"
+        "image_url" => "https://images.ygoprodeck.com/images/cards/99597615.jpg",
+        "subType" => "Equip", "speed" => 1
     ],
+    'blackpendant' => [
+        "id" => 65169794, "name" => "Black Pendant", "type" => "Spell Card", "humanReadableCardType" => "Equip Spell", "frameType" => "spell", 
+        "desc" => "The equipped monster gains 500 ATK. When this card is sent from the field to the Graveyard: Inflict 500 damage to your opponent.", "race" => "Equip", 
+        "image_url" => "https://images.ygoprodeck.com/images/cards/65169794.jpg",
+        "subType" => "Equip", "speed" => 1
+    ],
+
 
     // Quick-Play Spells
     'mst' => [
         "id" => 5318639, "name" => "Mystical Space Typhoon", "type" => "Spell Card", "humanReadableCardType" => "Quick-Play Spell", "frameType" => "spell", 
         "desc" => "Target 1 Spell/Trap on the field; destroy that target.", "race" => "Quick-Play", 
-        "image_url" => "https://images.ygoprodeck.com/images/cards/5318639.jpg"
+        "image_url" => "https://images.ygoprodeck.com/images/cards/5318639.jpg",
+        "subType" => "Quick-Play", "speed" => 2
     ],
     'rushrecklessly' => [
         "id" => 70046172, "name" => "Rush Recklessly", "type" => "Spell Card", "humanReadableCardType" => "Quick-Play Spell", "frameType" => "spell", 
         "desc" => "Target 1 face-up monster on the field; it gains 700 ATK until the end of this turn.", "race" => "Quick-Play", 
-        "image_url" => "https://images.ygoprodeck.com/images/cards/70046172.jpg"
+        "image_url" => "https://images.ygoprodeck.com/images/cards/70046172.jpg",
+        "subType" => "Quick-Play", "speed" => 2
     ],
 
     // Continuous Spells
     'bannerofcourage' => [
         "id" => 10012614, "name" => "Banner of Courage", "type" => "Spell Card", "humanReadableCardType" => "Continuous Spell", "frameType" => "spell", 
         "desc" => "All monsters you control gain 200 ATK during your Battle Phase only.", "race" => "Continuous", 
-        "image_url" => "https://images.ygoprodeck.com/images/cards/10012614.jpg"
+        "image_url" => "https://images.ygoprodeck.com/images/cards/10012614.jpg",
+        "subType" => "Continuous", "speed" => 1
     ],
     'burningland' => [
         "id" => 24294108, "name" => "Burning Land", "type" => "Spell Card", "humanReadableCardType" => "Continuous Spell", "frameType" => "spell", 
         "desc" => "During each player's Standby Phase: The turn player takes 500 damage.", "race" => "Continuous", 
-        "image_url" => "https://images.ygoprodeck.com/images/cards/24294108.jpg"
+        "image_url" => "https://images.ygoprodeck.com/images/cards/24294108.jpg",
+        "subType" => "Continuous", "speed" => 1
     ],
     //traps
     //normal trap
     'reinforcements' => [
         "id" => 17814387, "name" => "Reinforcements", "type" => "Trap Card", "humanReadableCardType" => "Normal Trap", "frameType" => "trap", 
         "desc" => "Target 1 face-up monster on the field; it gains 500 ATK until the end of this turn.", "race" => "Normal", 
-        "image_url" => "https://images.ygoprodeck.com/images/cards/17814387.jpg"
+        "image_url" => "https://images.ygoprodeck.com/images/cards/17814387.jpg",
+        "subType" => "Normal", "speed" => 2
     ],
     'justdesserts' => [
         "id" => 24068492, "name" => "Just Desserts", "type" => "Trap Card", "humanReadableCardType" => "Normal Trap", "frameType" => "trap", 
         "desc" => "Inflict 500 damage to your opponent for each monster they control.", "race" => "Normal", 
-        "image_url" => "https://images.ygoprodeck.com/images/cards/24068492.jpg"
+        "image_url" => "https://images.ygoprodeck.com/images/cards/24068492.jpg",
+        "subType" => "Normal", "speed" => 2
     ],
     // Continuous Traps
     'callofthehaunted' => [
         "id" => 97077563, "name" => "Call of the Haunted", "type" => "Trap Card", "humanReadableCardType" => "Continuous Trap", "frameType" => "trap", 
         "desc" => "Activate this card by targeting 1 monster in your GY; Special Summon that target in Attack Position. When this card leaves the field, destroy that monster. When that monster is destroyed, destroy this card.", "race" => "Continuous", 
-        "image_url" => "https://images.ygoprodeck.com/images/cards/97077563.jpg"
+        "image_url" => "https://images.ygoprodeck.com/images/cards/97077563.jpg",
+        "subType" => "Continuous", "speed" => 2
     ],
     'spellbindingcircle' => [
         "id" => 18807108, "name" => "Spellbinding Circle", "type" => "Trap Card", "humanReadableCardType" => "Continuous Trap", "frameType" => "trap", 
         "desc" => "Activate this card by targeting 1 monster your opponent controls; it cannot attack or change its battle position. When that monster is destroyed, destroy this card.", "race" => "Continuous", 
-        "image_url" => "https://images.ygoprodeck.com/images/cards/18807108.jpg"
+        "image_url" => "https://images.ygoprodeck.com/images/cards/18807108.jpg",
+        "subType" => "Continuous", "speed" => 2
     ],
 ];
 
@@ -212,7 +240,18 @@ function buildRandomDeck($db, $count) {
     return $deck;
 }
 
-// Build Decks with 20 cards now
+// Build Full Decks (3 of each card for testing)
+function buildFullDeck($db) {
+    $deck = [];
+    foreach ($db as $card) {
+        for ($i = 0; $i < 3; $i++) {
+            $deck[] = $card;
+        }
+    }
+    shuffle($deck);
+    return $deck;
+}
+// // Build Decks with 20 cards now
 $playerDeck = [
     $cardDB['geminielf'],
     $cardDB['raigeki'],
@@ -235,6 +274,7 @@ $playerDeck = [
     $cardDB['monsterreborn'],
     $cardDB['reinforcements'],
     $cardDB['callofthehaunted'],
+    
     
 ];
 $oppDeck    = buildRandomDeck($cardDB, 20);
@@ -281,6 +321,10 @@ function renderCardHTML($slotData, $isHand = false) {
     $attr .= ' data-level="' . htmlspecialchars($card['level']) . '"';
     $attr .= ' data-attribute="' . htmlspecialchars($card['attribute']) . '"';
     $attr .= ' data-race="' . htmlspecialchars($card['race']) . '"';
+    // Rules Engine Data
+    $attr .= ' data-sub-type="' . (isset($card['subType']) ? $card['subType'] : '') . '"';
+    $attr .= ' data-speed="' . (isset($card['speed']) ? $card['speed'] : '') . '"';
+    $attr .= ' data-summon-logic="' . (isset($card['summonLogic']) ? $card['summonLogic'] : '') . '"';
 
     $style = '';
     if ($isHand || strpos($state, 'face-up') !== false) {
