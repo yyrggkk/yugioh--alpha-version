@@ -12,7 +12,11 @@ let gameState = {
 
 let selectedFieldCard = null;
 let selectedHandCard = null;
+let selectedChainCard = null; // Track selection in UI
+// let chainStack = []; // Removed
+
 let battleState = { isAttacking: false, attackerCard: null };
+
 let spellState = { isTargeting: false, sourceCard: null, targetType: null };
 let tributeState = { isActive: false, pendingCard: null, requiredTributes: 0, currentTributes: [], actionType: null };
 let activeTurnBuffs = [];
@@ -111,9 +115,242 @@ function updateGYVisual(elementId, imgUrl) {
     gyZone.prepend(topCard);
 }
 
+const ChainManager = {
+    stack: [],
+    isResolving: false,
+
+    addLink: function (card, effectFn, player) {
+        const id = this.stack.length + 1;
+        this.stack.push({
+            id: id,
+            card: card,
+            effect: effectFn,
+            player: player
+        });
+
+        // Visual Badge
+        const badge = document.createElement('div');
+        badge.className = 'chain-badge';
+        badge.textContent = id;
+        card.appendChild(badge);
+
+        log(`Chain Link ${id}: ${card.getAttribute('data-name')} activated.`);
+
+        // After adding link, check for response from the OTHER player
+        // Simple Priority: If Player added, Opponent gets to respond.
+        // If Opponent added, Player gets to respond.
+        const nextResponder = (player === 'player') ? 'opponent' : 'player';
+        this.promptResponse(nextResponder);
+    },
+
+    promptResponse: function (responder) {
+        if (this.isResolving) return;
+
+        // Check for available Fast Effects (Traps/Quick-Plays) for the responder
+        const candidates = this.findCandidates(responder);
+
+        if (candidates.length > 0) {
+            // FIX: Do NOT overwrite pendingOpponentAction (which stores the Phase Resume callback)
+            // Instead, use the specific cancel callback for this modal prompt
+            window._currentCancelCallback = () => this.resolve();
+
+            openActivationModal(responder, candidates, () => {
+                // On Cancel:
+                this.resolve();
+            });
+        } else {
+            // No responses available, proceed to resolve
+            setTimeout(() => this.resolve(), 500);
+        }
+    },
+
+    findCandidates: function (player) {
+        const zoneSelector = (player === 'player') ? '.player-zone' : '.opp-zone';
+        const setCards = document.querySelectorAll(`${zoneSelector}.spell-trap-zone .card.face-down, ${zoneSelector} .hand-card`); // check hand response too?
+        // Simplification: Check Set Spells/Traps only for now (like original code)
+        // But original code checked ALL set cards. We should be specific.
+
+        const validCards = [];
+
+        // CHECK SET CARDS
+        const setSpells = document.querySelectorAll(`${zoneSelector}.spell-trap-zone .card.face-down`);
+        setSpells.forEach(c => {
+            const setTurn = parseInt(c.getAttribute('data-turn'));
+            const type = c.getAttribute('data-type');
+            const isTrap = type.includes('Trap');
+            const isQP = type.includes('Quick-Play');
+
+            // Logic: Traps/QP can act if not set this turn (or if strict rules met)
+            // Note: Simplification from original code
+            const canActivate = (setTurn < turnCount) || (!isPlayerTurn && setTurn === turnCount);
+            if (isTrap || isQP) {
+                if (canActivate) {
+                    validCards.push({ el: c, name: c.getAttribute('data-name'), img: c.getAttribute('data-img'), source: 'field' });
+                }
+            }
+        });
+
+        // TODO: Check Hand Quick-Play Spells (if implemented)
+
+        return validCards;
+    },
+
+    resolve: function () {
+        if (this.stack.length === 0) {
+            log("Chain Resolved.");
+            this.isResolving = false;
+            // Clean up global state if needed...
+            if (!isPlayerTurn && gameState.pendingOpponentAction) resumeOpponentTurn();
+            return;
+        }
+
+        this.isResolving = true;
+
+        // LIFO -> Pop last added
+        const link = this.stack.pop();
+        log(`Resolving Chain Link ${link.id}...`);
+
+        const card = link.card;
+        card.classList.add('resolving');
+
+        // Highlight logic
+        card.style.boxShadow = "0 0 20px #ffcc00";
+
+        // EXECUTE EFFECT (Capture return value)
+        let result = true;
+        if (link.effect) {
+            result = link.effect();
+        }
+
+        // If returned false, PAUSE resolution
+        if (result === false) {
+            log("Chain Link paused for selection...");
+            this.isPaused = true;
+            return;
+        }
+
+        // Otherwise continue after delay
+        setTimeout(() => {
+            card.classList.remove('resolving');
+            card.style.boxShadow = "";
+
+            const badge = card.querySelector('.chain-badge');
+            if (badge) badge.remove();
+
+            // Next Link
+            this.resolve();
+        }, 1200);
+    },
+
+    // NEW: Resume after targeting
+    continueResolution: function () {
+        if (!this.isResolving) return;
+
+        // Find the currently resolving card (visual cleanup)
+        const resolvingCard = document.querySelector('.card.resolving');
+        if (resolvingCard) {
+            resolvingCard.classList.remove('resolving');
+            resolvingCard.style.boxShadow = "";
+            const badge = resolvingCard.querySelector('.chain-badge');
+            if (badge) badge.remove();
+
+            // Note: The specific effect function is responsible for sending to GY usually.
+            // But if it was a paused spell (e.g. Reinforcements), it might need cleanup?
+            // The effect wrapper in activateSetCard does "setTimeout -> sendToGraveyard" if finished=true.
+            // For targeting spells, we returned false initially. 
+            // So we need to handle "finishing" it here or in resolveSpellTarget.
+            // Let's assume resolveSpellTarget logic handles the "sendToGraveyard" part for the specific card.
+        }
+
+        this.isPaused = false;
+        // Resume next link
+        setTimeout(() => this.resolve(), 500);
+    },
+
+    // NEW: Check if Player wants to activate something at start of Phase/Step
+    checkPhaseResponse: function (player, onContinue) {
+        // If checking for Player, we look for Player's cards
+        const candidates = this.findCandidates(player);
+
+        if (candidates.length > 0) {
+            gameState.pendingOpponentAction = onContinue;
+
+            // Re-use modal but slightly different context text
+            const modal = document.getElementById('activationModal');
+            const list = document.getElementById('activationList');
+            const text = document.getElementById('activationText');
+
+            text.textContent = `Opponent Phase: ${currentPhase}. Activate a card?`;
+            list.innerHTML = '';
+            selectedChainCard = null;
+
+            candidates.forEach(cand => {
+                const el = document.createElement('div');
+                el.className = 'chain-card-item';
+                el.style.backgroundImage = `url('${cand.img}')`;
+                el.onclick = function (e) {
+                    e.stopPropagation();
+                    document.querySelectorAll('.chain-card-item').forEach(c => c.classList.remove('selected'));
+                    el.classList.add('selected');
+                    selectedChainCard = cand;
+                };
+                list.appendChild(el);
+            });
+
+            // On Cancel: Just resume
+            window._currentCancelCallback = () => {
+                resumeOpponentTurn();
+            };
+
+            modal.classList.add('active');
+        } else {
+            // No candidates, proceed
+            setTimeout(onContinue, 500);
+        }
+    }
+};
+
+// --- HELPER: Activation Modal ---
+function openActivationModal(player, candidates, onCancel) {
+    const modal = document.getElementById('activationModal');
+    const list = document.getElementById('activationList');
+    const text = document.getElementById('activationText');
+
+    text.textContent = `${player === 'player' ? 'You' : 'Opponent'} - Chain a card?`;
+    list.innerHTML = '';
+    selectedChainCard = null;
+
+    candidates.forEach(cand => {
+        const el = document.createElement('div');
+        el.className = 'chain-card-item';
+        el.style.backgroundImage = `url('${cand.img}')`;
+        el.onclick = function (e) {
+            e.stopPropagation();
+            document.querySelectorAll('.chain-card-item').forEach(c => c.classList.remove('selected'));
+            el.classList.add('selected');
+            selectedChainCard = cand;
+        };
+        list.appendChild(el);
+    });
+
+    // Store Cancel Callback on the modal temporarily or use global
+    // We'll hijack the existing cancelActivation function
+    window._currentCancelCallback = onCancel;
+
+    modal.classList.add('active');
+}
+
+// Replaces addToChain
+function addToChain(card, effectFn, player) {
+    ChainManager.addLink(card, effectFn, player);
+}
+
 // =========================================
 // 2. SPELL & EFFECT SYSTEM (FACTORIES)
 // =========================================
+
+// Fix Ownership Check in Factories
+// (Usually getOwner is generic, but let's check ModifyLP)
 
 function modifyStats(card, atkMod, defMod) {
     let currentAtk = parseInt(card.getAttribute('data-atk'));
@@ -395,7 +632,12 @@ function resolveSpellTarget(target) {
             const spellOwner = getOwner(source);
             setTimeout(() => {
                 sendToGraveyard(source, spellOwner);
-                if (!isPlayerTurn && gameState.pendingOpponentAction) resumeOpponentTurn();
+                // IF WE ARE IN A CHAIN -> RESUME IT
+                if (ChainManager.isResolving) {
+                    ChainManager.continueResolution();
+                } else {
+                    if (!isPlayerTurn && gameState.pendingOpponentAction) resumeOpponentTurn();
+                }
             }, 500);
         }
         return;
@@ -496,69 +738,20 @@ const phaseOrder = ['DP', 'SP', 'MP1', 'BP', 'MP2', 'EP'];
 // gameState definition removed (duplicate)
 
 // --- NEW: RESPONSE / CHAIN SYSTEM ---
-let selectedChainCard = null; // Track selection
 
-function checkResponseWindow(nextActionCallback) {
-    if (gameState.gameOver) return;
 
-    const setCards = document.querySelectorAll('.spell-trap-zone .card.face-down');
-    let candidates = [];
-
-    setCards.forEach(c => {
-        const name = c.getAttribute('data-name');
-        const setTurn = parseInt(c.getAttribute('data-turn'));
-        const type = c.getAttribute('data-type');
-        const isTrap = type.includes('Trap');
-        const isQP = type.includes('Quick-Play');
-
-        if (isTrap || isQP) {
-            const canActivate = (setTurn < turnCount) || (!isPlayerTurn && setTurn === turnCount);
-            if (canActivate) {
-                candidates.push({ el: c, name: name, img: c.getAttribute('data-img') });
-            }
-        }
-    });
-
-    if (candidates.length > 0) {
-        // Pause and Show Modal
-        gameState.pendingOpponentAction = nextActionCallback;
-        const modal = document.getElementById('activationModal');
-        const list = document.getElementById('activationList');
-        const text = document.getElementById('activationText'); // e.g. "Opponent Phase..."
-
-        text.textContent = `Opponent Phase: ${currentPhase}. Activate a card?`;
-        list.innerHTML = '';
-        selectedChainCard = null; // Reset selection
-
-        // Render Candidates
-        candidates.forEach(cand => {
-            const el = document.createElement('div');
-            el.className = 'chain-card-item';
-            el.style.backgroundImage = `url('${cand.img}')`;
-
-            el.onclick = function (e) {
-                e.stopPropagation();
-                // Deselect others
-                document.querySelectorAll('.chain-card-item').forEach(c => c.classList.remove('selected'));
-                // Select this
-                el.classList.add('selected');
-                selectedChainCard = cand;
-            };
-            list.appendChild(el);
-        });
-
-        modal.classList.add('active');
-    } else {
-        // No candidates, proceed immediately
-        setTimeout(nextActionCallback, 500);
-    }
-}
-
+// --- REPLACED BY ChainManager ---
 function cancelActivation() {
     const modal = document.getElementById('activationModal');
     modal.classList.remove('active');
     selectedChainCard = null;
-    resumeOpponentTurn();
+    if (window._currentCancelCallback) {
+        const cb = window._currentCancelCallback;
+        window._currentCancelCallback = null;
+        cb();
+    } else {
+        resumeOpponentTurn();
+    }
 }
 
 function confirmActivation() {
@@ -568,8 +761,12 @@ function confirmActivation() {
     }
     const modal = document.getElementById('activationModal');
     modal.classList.remove('active');
+    window._currentCancelCallback = null; // Clear cancel trigger
 
     // Activate logic
+    // Note: If we support Hand cards here, we need to check source.
+    // For now, assuming Set Cards:
+    // Link 1 (or next link) logic
     activateSetCard(selectedChainCard.el, true);
     selectedChainCard = null;
 }
@@ -580,6 +777,12 @@ function resumeOpponentTurn() {
         gameState.pendingOpponentAction = null;
         setTimeout(cb, 500);
     }
+}
+// checkResponseWindow removed (Superseded by ChainManager.promptResponse)
+function checkResponseWindow(nextActionCallback) {
+    // Legacy stub or remove completely? 
+    // We'll leave it empty to prevent crashes if called elsewhere, but we should remove callers.
+    if (nextActionCallback) nextActionCallback();
 }
 
 window.onload = function () {
@@ -676,7 +879,8 @@ function switchTurn() {
 function oppDrawPhase() {
     if (gameState.gameOver) return;
     drawOpponentCard();
-    checkResponseWindow(oppStandbyPhase);
+    // Check if Player wants to respond to Draw Phase
+    ChainManager.checkPhaseResponse('player', oppStandbyPhase);
 }
 
 function oppStandbyPhase() {
@@ -689,7 +893,8 @@ function oppStandbyPhase() {
         }
     });
 
-    checkResponseWindow(oppMainPhase);
+    // Check Response before Main Phase
+    ChainManager.checkPhaseResponse('player', oppMainPhase);
 }
 
 function oppMainPhase() {
@@ -701,7 +906,8 @@ function oppMainPhase() {
     // Simple AI: Summon if possible?
     // (Existing code didn't do much AI, just waited and ended turn. We keep it simple)
 
-    checkResponseWindow(oppEndTurn);
+    // Check Response before End Turn
+    ChainManager.checkPhaseResponse('player', oppEndTurn);
 }
 
 function oppEndTurn() {
@@ -911,26 +1117,37 @@ function executeCardPlay(handCardEl, action) {
     targetZone.appendChild(newCard);
 
     if (action === 'activate') {
-        let finished = true;
-        if (cardEffects[cardData.name] && typeof cardEffects[cardData.name] === 'function') {
-            finished = cardEffects[cardData.name](newCard);
-        }
-        else if (cardEffects[cardData.name] && cardEffects[cardData.name].type === 'Continuous') {
-            log(`Activated Continuous Spell: ${cardData.name}`);
-            finished = false;
-            updateContinuousEffects();
-        }
-        else { log(`Activated: ${cardData.name}`); }
+        const cardName = cardData.name;
 
-        const typeStr = cardData.type || "";
-        const raceStr = cardData.race || "";
-        const isEquip = raceStr === 'Equip' || typeStr.includes('Equip');
-        const isCont = raceStr === 'Continuous' || typeStr.includes('Continuous');
+        // WRAPPER for Hand Activation
+        const effectWrapper = function () {
+            let finished = true;
+            if (cardEffects[cardName] && typeof cardEffects[cardName] === 'function') {
+                finished = cardEffects[cardName](newCard);
+            }
+            else if (cardEffects[cardName] && cardEffects[cardName].type === 'Continuous') {
+                log(`Activated Continuous Spell: ${cardName}`);
+                finished = false;
+                updateContinuousEffects();
+            }
+            else { log(`Activated: ${cardName}`); }
 
-        if (!isEquip && !isCont && finished) {
-            setTimeout(() => { sendToGraveyard(newCard, 'player'); }, 1000);
-        }
+            const typeStr = cardData.type || "";
+            const raceStr = cardData.race || "";
+            const isEquip = raceStr === 'Equip' || typeStr.includes('Equip');
+            const isCont = raceStr === 'Continuous' || typeStr.includes('Continuous');
+
+            if (!isEquip && !isCont && finished) {
+                const owner = getOwner(newCard); // FIX: Use dynamic owner
+                setTimeout(() => { sendToGraveyard(newCard, owner); }, 1000);
+            }
+            return finished; // FIX: Return status to ChainManager
+        };
+
+        // Add to Chain (Player activating from Hand)
+        addToChain(newCard, effectWrapper, 'player');
     }
+
 
     handCardEl.remove(); selectedHandCard = null;
     actionMenu.classList.remove('active');
@@ -1099,29 +1316,45 @@ function activateSetCard(cardOverride = null, force = false) {
         }
     }
 
-    // EXECUTE ACTIVATION
+    // EXECUTE ACTIVATION -> NOW ADDS TO CHAIN
     cardEl.classList.remove('face-down'); cardEl.classList.add('face-up');
     const imgUrl = cardEl.getAttribute('data-img');
     cardEl.style.backgroundImage = `url('${imgUrl}')`;
     const cardName = cardEl.getAttribute('data-name');
-    log(`Activated Set Card: ${cardName}`);
 
-    let finished = true;
-    if (cardEffects[cardName] && typeof cardEffects[cardName] === 'function') { finished = cardEffects[cardName](cardEl); }
-    else if (cardEffects[cardName] && cardEffects[cardName].type === 'Continuous') { finished = false; updateContinuousEffects(); }
+    // Create Effect Wrapper
+    const effectWrapper = function () {
+        let finished = true;
 
-    const typeStr = cardEl.getAttribute('data-type') || "";
-    const raceStr = cardEl.getAttribute('data-race') || "";
-    const isEquip = raceStr === 'Equip' || typeStr.includes('Equip');
-    const isCont = raceStr === 'Continuous' || typeStr.includes('Continuous');
+        // --- ORIGINAL LOGIC RESTORED INSIDE WRAPPER ---
+        if (cardEffects[cardName] && typeof cardEffects[cardName] === 'function') { finished = cardEffects[cardName](cardEl); }
+        else if (cardEffects[cardName] && cardEffects[cardName].type === 'Continuous') { finished = false; updateContinuousEffects(); }
 
-    if (!isEquip && !isCont && finished) {
-        setTimeout(() => { sendToGraveyard(cardEl, 'player'); }, 1000);
-        // If finished immediately (no targeting), resume opponent turn if we are in one!
-        if (!isPlayerTurn && gameState.pendingOpponentAction) resumeOpponentTurn();
-    }
+        const typeStr = cardEl.getAttribute('data-type') || "";
+        const raceStr = cardEl.getAttribute('data-race') || "";
+        const isEquip = raceStr === 'Equip' || typeStr.includes('Equip');
+        const isCont = raceStr === 'Continuous' || typeStr.includes('Continuous');
+
+        if (!isEquip && !isCont && finished) {
+            const owner = getOwner(cardEl); // FIX: Use dynamic owner
+            setTimeout(() => { sendToGraveyard(cardEl, owner); }, 1000);
+        }
+        return finished; // FIX: Return status to ChainManager
+    };
+
+    // Add into Chain
+    addToChain(cardEl, effectWrapper, isPlayerTurn ? 'player' : 'opponent');
+
+    // HIDE MENU
     actionMenu.classList.remove('active');
+
+    // NOTE: checkResponseWindow is now handled internally by ChainManager via addToChain
+    // So we don't need to manually trigger it here.
+
 }
+
+// Old resolveChain removed (Superseded by ChainManager.resolve)
+
 
 // =========================================
 // 6. BATTLE LOGIC

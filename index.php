@@ -155,6 +155,26 @@
         .surrender-btn:hover { background: rgba(255, 0, 0, 0.2); box-shadow: 0 0 15px #ff3333; color: white; }
         .debug-btn { position: fixed; top: 60px; left: 20px; z-index: 1000; padding: 5px; background: #333; color: white; cursor: pointer; border: 1px solid #666; font-size: 10px; }
         .draw-card-anim { position: absolute; width: 68px; height: 99px; background-image: var(--card-back-url); background-size: cover; border-radius: 4px; box-shadow: 0 0 10px white; z-index: 500; transition: all 0.8s ease-in-out; }
+
+        /* --- CHAIN SYSTEM VISUALS --- */
+        .chain-badge {
+            position: absolute; top: -10px; right: -10px;
+            width: 30px; height: 30px;
+            background: #00d4ff; border: 2px solid #fff; border-radius: 50%;
+            color: #000; font-weight: 900; font-size: 16px;
+            display: flex; justify-content: center; align-items: center;
+            box-shadow: 0 0 10px #00d4ff; z-index: 10;
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes popIn { from { transform: scale(0); } to { transform: scale(1); } }
+
+        .card.resolving {
+            box-shadow: 0 0 30px #ffe600 !important;
+            border-color: #ffe600 !important;
+            z-index: 100;
+            transform: scale(1.2) !important;
+            transition: all 0.5s;
+        }
     </style>
 </head>
 <body>
