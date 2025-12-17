@@ -166,6 +166,17 @@ $rawDB = [
         "desc" => "Inflict 500 damage to your opponent for each monster they control.", "race" => "Normal", 
         "image_url" => "https://images.ygoprodeck.com/images/cards/24068492.jpg"
     ],
+    // Continuous Traps
+    'callofthehaunted' => [
+        "id" => 97077563, "name" => "Call of the Haunted", "type" => "Trap Card", "humanReadableCardType" => "Continuous Trap", "frameType" => "trap", 
+        "desc" => "Activate this card by targeting 1 monster in your GY; Special Summon that target in Attack Position. When this card leaves the field, destroy that monster. When that monster is destroyed, destroy this card.", "race" => "Continuous", 
+        "image_url" => "https://images.ygoprodeck.com/images/cards/97077563.jpg"
+    ],
+    'spellbindingcircle' => [
+        "id" => 18807108, "name" => "Spellbinding Circle", "type" => "Trap Card", "humanReadableCardType" => "Continuous Trap", "frameType" => "trap", 
+        "desc" => "Activate this card by targeting 1 monster your opponent controls; it cannot attack or change its battle position. When that monster is destroyed, destroy this card.", "race" => "Continuous", 
+        "image_url" => "https://images.ygoprodeck.com/images/cards/18807108.jpg"
+    ],
 ];
 
 // Pre-processing to normalize data for the Game Engine
@@ -204,7 +215,6 @@ function buildRandomDeck($db, $count) {
 // Build Decks with 20 cards now
 $playerDeck = [
     $cardDB['geminielf'],
-    $cardDB['geminielf'],
     $cardDB['raigeki'],
     $cardDB['dianketo'],
     $cardDB['ookazi'],
@@ -214,13 +224,18 @@ $playerDeck = [
     $cardDB['burningland'],
     $cardDB['axeofdespair'],
     $cardDB['malevolentnuzzler'],
-    $cardDB['mst'],
     $cardDB['rushrecklessly'],
     $cardDB['geminielf'],
+    $cardDB['spellbindingcircle'],
+    $cardDB['justdesserts'],
+    $cardDB['mst'],
+    $cardDB['geminielf'],
+    $cardDB['mst'],
     $cardDB['pot'],
     $cardDB['monsterreborn'],
-    $cardDB['justdesserts'],
     $cardDB['reinforcements'],
+    $cardDB['callofthehaunted'],
+    
 ];
 $oppDeck    = buildRandomDeck($cardDB, 20);
 
@@ -237,7 +252,7 @@ $oppMonsters = [
     2 => null
 ];
 $oppSpells = [0 => null, 1 => $cardDB['bannerofcourage'], 2 => null];
-$oppGY = [];
+$oppGY = [$cardDB['summonedskull']];
 $oppExDeck = [];
 
 $playerHand = [];
