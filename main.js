@@ -653,7 +653,13 @@ function resolveSpellTarget(target) {
         // Destroy MST itself
         setTimeout(() => {
             sendToGraveyard(source, spellOwner);
-            if (!isPlayerTurn && gameState.pendingOpponentAction) resumeOpponentTurn();
+
+            // FIX: Resume Chain if we are in one
+            if (ChainManager.isResolving) {
+                ChainManager.continueResolution();
+            } else {
+                if (!isPlayerTurn && gameState.pendingOpponentAction) resumeOpponentTurn();
+            }
         }, 500);
     }
 }
