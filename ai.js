@@ -1,0 +1,484 @@
+// =========================================
+// AI.JS - AI Logic and Decision Making
+// =========================================
+
+// --- AI OPPONENT TURN FLOW ---
+
+function oppDrawPhase() {
+    if (gameState.gameOver) return;
+    drawOpponentCard();
+    // Check if Player wants to respond to Draw Phase
+    ChainManager.checkPhaseResponse('player', oppStandbyPhase);
+}
+
+function oppStandbyPhase() {
+    if (gameState.gameOver) return;
+    setPhaseText('SP', "STANDBY PHASE");
+    const spells = document.querySelectorAll('.spell-trap-zone .card.face-up');
+    spells.forEach(s => {
+        if (s.getAttribute('data-name') === 'Burning Land') {
+            updateLP(500, 'opponent'); // Opponent Turn = Opponent takes damage
+        }
+    });
+
+    // Check Response before Main Phase
+    ChainManager.checkPhaseResponse('player', oppMainPhase);
+}
+
+function oppMainPhase() {
+    if (gameState.gameOver) return;
+    setPhaseText('MP1', "MAIN PHASE 1");
+    currentPhase = 'MP1';
+    updateContinuousEffects();
+
+    log("Opponent Main Phase 1: Thinking...");
+
+    // Initialize AI state for this Main Phase
+    gameState.aiMainPhaseState = {
+        hasSummoned: false,
+        backrowSetCount: 0
+    };
+
+    setTimeout(() => {
+        oppMainPhaseStep();
+    }, 1500);
+}
+
+// Sequential AI "Think Loop" for Main Phase
+function oppMainPhaseStep() {
+    if (gameState.gameOver) return;
+
+    // PRIORITY 1: Monster Summon (if not summoned yet)
+    if (!gameState.aiMainPhaseState.hasSummoned) {
+        const monsters = oppHandData.map((c, i) => ({ ...c, index: i }))
+            .filter(c => c.category === 'monster')
+            .sort((a, b) => b.atk - a.atk);
+
+        const myMonsters = document.querySelectorAll('.opp-zone.monster-zone .card');
+        const myTributeCount = myMonsters.length;
+        const slots = 3 - myTributeCount;
+
+        if (slots > 0 && monsters.length > 0) {
+            // Check for Tribute Summon
+            const tributeCandidate = monsters.find(c => c.level >= 5);
+            if (tributeCandidate) {
+                const required = tributeCandidate.level >= 7 ? 2 : 1;
+                const myMonstersArray = Array.from(myMonsters).map(el => ({
+                    el: el,
+                    atk: parseInt(el.getAttribute('data-atk'))
+                })).sort((a, b) => a.atk - b.atk);
+
+                if (myMonstersArray.length >= required) {
+                    const fodder = [];
+                    for (let k = 0; k < required; k++) {
+                        fodder.push(myMonstersArray[k]);
+                    }
+                    const maxFodderAtk = Math.max(...fodder.map(f => f.atk));
+
+                    if (parseInt(tributeCandidate.atk) > maxFodderAtk || maxFodderAtk <= 1200) {
+                        log(`Opponent tributes ${required} monster(s) to summon ${tributeCandidate.name}!`);
+                        fodder.forEach(f => sendToGraveyard(f.el, 'opponent'));
+                        executeOpponentPlay(tributeCandidate, 'summon');
+                        gameState.aiMainPhaseState.hasSummoned = true;
+
+                        // Schedule next step
+                        setTimeout(() => oppMainPhaseStep(), 800);
+                        return;
+                    }
+                }
+            }
+
+            // Standard Summon / Set
+            const bestMonster = monsters[0];
+            if (bestMonster && bestMonster.level <= 4) {
+                const playerBestAtk = getPlayerBestAtk();
+                let action = 'set';
+
+                if (parseInt(bestMonster.atk) >= playerBestAtk || parseInt(bestMonster.atk) >= 1600) {
+                    action = 'summon';
+                } else if (parseInt(bestMonster.def) >= 1500) {
+                    action = 'set';
+                } else {
+                    action = 'set';
+                }
+
+                executeOpponentPlay(bestMonster, action);
+                gameState.aiMainPhaseState.hasSummoned = true;
+
+                // Schedule next step
+                setTimeout(() => oppMainPhaseStep(), 800);
+                return;
+            }
+        }
+    }
+
+    // PRIORITY 2: Activate ONE Normal Spell (if beneficial)
+    const spells = oppHandData.map((c, i) => ({ ...c, index: i }))
+        .filter(c => c.category === 'spell' || c.category === 'trap');
+
+    for (let c of spells) {
+        const type = c.type || '';
+        const humanType = c.humanReadableCardType || '';
+        const race = c.race || '';
+        const isNormal = type.includes('Normal') || type.includes('Field') || humanType.includes('Normal') || (race === 'Normal' && c.category === 'spell');
+
+        if (isNormal) {
+            const shouldAct = aiShouldActivate(c);
+            if (shouldAct) {
+                log(`AI Activates Spell: ${c.name}`);
+
+                // Set pending action BEFORE activation so chain resolution calls us back
+                gameState.pendingOpponentAction = oppMainPhaseStep;
+                executeOpponentPlay(c, 'activate');
+                return; // Wait for chain resolution to call us back
+            }
+        }
+    }
+
+    // PRIORITY 3: Set ONE Backrow Card (if space available)
+    const openBackrow = document.querySelectorAll('.opp-zone.spell-trap-zone:empty');
+    if (gameState.aiMainPhaseState.backrowSetCount < openBackrow.length && gameState.aiMainPhaseState.backrowSetCount < 2) {
+        for (let c of spells) {
+            const type = c.type || '';
+            const humanType = c.humanReadableCardType || '';
+            const race = c.race || '';
+            const isNormal = type.includes('Normal') || type.includes('Field') || humanType.includes('Normal') || (race === 'Normal' && c.category === 'spell');
+
+            // Set Traps, Quick-Plays, or non-activatable Normal Spells
+            if (!isNormal || (isNormal && !aiShouldActivate(c))) {
+                const isQuickPlay = race === 'Quick-Play' || type.includes('Quick-Play') || humanType.includes('Quick-Play');
+
+                // Set Quick-Plays or Traps
+                if (isQuickPlay || c.category === 'trap') {
+                    executeOpponentPlay(c, 'set');
+                    gameState.aiMainPhaseState.backrowSetCount++;
+
+                    // Schedule next step
+                    setTimeout(() => oppMainPhaseStep(), 800);
+                    return;
+                }
+            }
+        }
+    }
+
+    // PRIORITY 4: No more actions -> Proceed to Battle Phase
+    log("Opponent Main Phase complete. Proceeding...");
+    setTimeout(() => {
+        ChainManager.checkPhaseResponse('player', oppBattlePhase);
+    }, 1000);
+}
+
+function oppBattlePhase() {
+    if (gameState.gameOver) return;
+    setPhaseText('BP', "BATTLE PHASE");
+    currentPhase = 'BP';
+    updateContinuousEffects();
+
+    log("Opponent Battle Phase");
+
+    setTimeout(() => {
+        // Get attackers ONCE, but process them sequentially
+        const myAttackers = Array.from(document.querySelectorAll('.opp-zone.monster-zone .card.pos-atk'));
+
+        // Recursive function to handle sequential attacks
+        const executeAttackSequence = (index) => {
+            if (index >= myAttackers.length || gameState.gameOver) {
+                // Done with all attacks
+                setTimeout(() => {
+                    ChainManager.checkPhaseResponse('player', oppMainPhase2);
+                }, 1000);
+                return;
+            }
+
+            const attacker = myAttackers[index];
+
+            // Validation: Check if still on field and able to attack
+            if (!attacker.closest('.opp-zone') ||
+                attacker.getAttribute('data-attacked') === 'true' ||
+                attacker.getAttribute('data-disable-attack') === 'true') {
+
+                // Skip this attacker
+                executeAttackSequence(index + 1);
+                return;
+            }
+
+            // DYNAMIC TARGET SELECTION (Re-scan board)
+            const playerMonsters = Array.from(document.querySelectorAll('.player-zone.monster-zone .card'));
+
+            let target = null;
+            let isDirect = false;
+
+            if (playerMonsters.length === 0) {
+                isDirect = true; // Direct Attack
+            } else {
+                // Find beatable target
+                const atkVal = parseInt(attacker.getAttribute('data-atk'));
+                let bestTarget = null;
+                let maxThreat = -1;
+
+                playerMonsters.forEach(pm => {
+                    const isDef = pm.classList.contains('pos-def');
+                    const pAtk = parseInt(pm.getAttribute('data-atk'));
+                    const pDef = parseInt(pm.getAttribute('data-def'));
+
+                    if (isDef) {
+                        if (pm.classList.contains('face-down')) {
+                            // Hit Face-down. High priority.
+                            if (maxThreat < 0) { maxThreat = 0; bestTarget = pm; }
+                        } else {
+                            if (atkVal > pDef) {
+                                if (pDef > maxThreat) { maxThreat = pDef; bestTarget = pm; }
+                            }
+                        }
+                    } else {
+                        if (atkVal > pAtk) {
+                            if (pAtk > maxThreat) { maxThreat = pAtk; bestTarget = pm; }
+                        }
+                    }
+                });
+                if (bestTarget) target = bestTarget;
+            }
+
+            // EXECUTE OR SKIP
+            if (target || isDirect) {
+                log(`Opponent attacks ${isDirect ? 'Directly' : target.getAttribute('data-name')}!`);
+                battleState.attackerCard = attacker;
+
+                if (isDirect) performDirectAttack(attacker);
+                else resolveAttack(attacker, target);
+
+                // Wait for resolution animation before next attack
+                const nextStep = () => {
+                    if (gameState.isPaused) {
+                        // Wait/Poll until unpaused
+                        setTimeout(nextStep, 500);
+                    } else {
+                        executeAttackSequence(index + 1);
+                    }
+                };
+
+                setTimeout(nextStep, 2500);
+            } else {
+                // No valid target? Skip.
+                executeAttackSequence(index + 1);
+            }
+        };
+
+        // Start Sequence
+        executeAttackSequence(0);
+
+    }, 1000);
+}
+
+function oppMainPhase2() {
+    if (gameState.gameOver) return;
+    setPhaseText('MP2', "MAIN PHASE 2");
+    currentPhase = 'MP2';
+    updateContinuousEffects();
+    log("Opponent Main Phase 2");
+
+    // Logic: Set any remaining Spells? for now simple pass
+    setTimeout(() => {
+        // Prompt at End of MP2 (Before EP)
+        ChainManager.checkPhaseResponse('player', oppEndPhase);
+    }, 1000);
+}
+
+function oppEndPhase() {
+    if (gameState.gameOver) return;
+    setPhaseText('EP', "END PHASE");
+    currentPhase = 'EP'; // Important: Update phase var
+    log("Opponent End Phase");
+
+    updateContinuousEffects();
+
+    setTimeout(() => {
+        // Prompt at End of EP (Before Turn Change)
+        ChainManager.checkPhaseResponse('player', switchTurn);
+    }, 1000);
+}
+
+// --- AI HELPER FUNCTIONS ---
+
+function getPlayerBestAtk() {
+    let max = 0;
+    document.querySelectorAll('.player-zone.monster-zone .card.pos-atk').forEach(c => {
+        const atk = parseInt(c.getAttribute('data-atk'));
+        if (atk > max) max = atk;
+    });
+    // Check DEF of DEF pos monsters too? (To beat them)
+    document.querySelectorAll('.player-zone.monster-zone .card.pos-def').forEach(c => {
+        const def = parseInt(c.getAttribute('data-def'));
+        // If we want to beat it, we need ATK > DEF. 
+        if (def > max) max = def;
+    });
+    return max;
+}
+
+function executeOpponentPlay(cardData, action) {
+    if (!cardData) return;
+
+    // Remove from Hand Data
+    const index = oppHandData.findIndex(c => c.name === cardData.name && c.desc === cardData.desc); // Simple match
+    if (index > -1) {
+        oppHandData.splice(index, 1);
+        updateCounters();
+        // Remove visual card (last one)
+        const handEl = document.querySelector('.opponent-hand-container .opponent-hand-card');
+        if (handEl) handEl.remove();
+    }
+
+    // Determine Zone
+    let targetZone = null;
+    let zonesSelector = action === 'activate' || cardData.category !== 'monster'
+        ? '.opp-zone.spell-trap-zone:empty'
+        : '.opp-zone.monster-zone:empty';
+
+    targetZone = document.querySelector(zonesSelector);
+    if (!targetZone) { log("AI Error: No Zone Avail"); return; }
+
+    // CSS Class
+    let cssClass = '';
+    if (cardData.category === 'monster') {
+        cssClass = (action === 'summon' || action === 'special-summon') ? 'face-up pos-atk' : 'face-down pos-def';
+    } else {
+        cssClass = 'face-down pos-atk'; // AI mostly Sets
+    }
+
+    const newCard = document.createElement('div');
+    newCard.className = `card ${cssClass}`;
+    newCard.setAttribute('data-turn', turnCount);
+    newCard.setAttribute('data-attacked', 'false');
+    const uid = generateUID();
+    newCard.setAttribute('data-uid', uid);
+
+    for (let k in cardData) {
+        if (k !== 'index') { // Don't add internal index
+            if (k === 'category') {
+                newCard.setAttribute('data-card-category', cardData[k]);
+            } else if (k === 'type') {
+                // Use humanReadableCardType for consistent display
+                const displayType = cardData.humanReadableCardType || cardData.full_type || cardData.type;
+                newCard.setAttribute('data-type', displayType);
+            } else {
+                newCard.setAttribute('data-' + k, cardData[k]);
+            }
+        }
+    }
+
+    // Important Stats
+    newCard.setAttribute('data-original-atk', cardData.atk);
+    newCard.setAttribute('data-original-def', cardData.def);
+    newCard.setAttribute('data-owner', 'opponent');
+
+    if (action === 'set') newCard.setAttribute('data-set-turn', turnCount);
+
+    if (cssClass.includes('face-up')) {
+        newCard.style.backgroundImage = `url('${cardData.img}')`;
+        if (cardData.category === 'monster') {
+            newCard.innerHTML = `<div class="stats-bar"><span class="stat-val stat-atk">${cardData.atk}</span><span class="stat-val stat-def">${cardData.def}</span></div>`;
+        }
+    } else {
+        // Face down
+        newCard.style.backgroundImage = `var(--card-back-url)`;
+    }
+
+    targetZone.appendChild(newCard);
+    log(`Opponent ${action}s a card.`);
+
+    if (action === 'activate') {
+        // Trigger effect immediately (as Chain Link 1)
+        // We use a small delay to allow DOM to update
+        setTimeout(() => {
+            activateSetCard(newCard, true);
+        }, 500);
+    }
+}
+
+// --- AI DECISION LOGIC ---
+
+function aiShouldActivate(cardOrData) {
+    // If it's a DOM element
+    let cardEl = null;
+    let name = '';
+
+    if (cardOrData.nodeType) {
+        cardEl = cardOrData;
+        name = cardEl.getAttribute('data-name');
+    } else {
+        // It's a data object (from Hand)
+        name = cardOrData.name;
+    }
+
+    // 1. Check Technical Legality (if element exists)
+    if (cardEl) {
+        if (!validateActivation(cardEl, ChainManager.stack.length === 0)) return false;
+    } else {
+        // If from Hand (data object), we simulate Condition Check
+        if (cardEffects[name] && typeof cardEffects[name].condition === 'function') {
+            const dummy = document.createElement('div');
+            dummy.setAttribute('data-name', name);
+            if (!cardEffects[name].condition(dummy)) return false;
+        }
+    }
+
+    // 2. Strategic Heuristics (Avoid wasting cards)
+
+    // Destruction Logic
+    const playerMons = document.querySelectorAll('.player-zone.monster-zone .card').length;
+    const playerBackrow = document.querySelectorAll('.player-zone.spell-trap-zone .card, .player-zone.field-zone .card').length;
+
+    if (['Raigeki', 'Dark Hole', 'Fissure', 'Smashing Ground', 'Trap Hole'].includes(name)) {
+        if (playerMons === 0) return false;
+    }
+
+    if (['Heavy Storm', 'Harpie\'s Feather Duster', 'Mystical Space Typhoon', 'Dust Tornado', 'Twister'].includes(name)) {
+        if (playerBackrow === 0) return false;
+    }
+
+    // Stat Modifiers / Battle
+    if (['Rush Recklessly', 'Reinforcements', 'Castle Walls'].includes(name)) {
+        // Only if in Battle Phase?
+        if (currentPhase !== 'BP') return false;
+    }
+
+    // Mirror Force / Sakuretsu - handled by condition implicitly mostly, but explicit check:
+    if (['Mirror Force', 'Sakuretsu Armor', 'Magic Cylinder'].includes(name)) {
+        if (!battleState.isAttacking) return false;
+    }
+
+    return true;
+}
+
+// These methods are added to ChainManager but defined here for AI logic
+// They will be called from main.js ChainManager object
+
+function aiSelectBestResponse(candidates) {
+    if (!candidates || candidates.length === 0) return null;
+
+    // Filter by validity first using general heuristic
+    const validCandidates = candidates.filter(c => aiShouldActivate(c.el));
+
+    if (validCandidates.length === 0) return null;
+
+    // Sort by priority (Simple heuristic)
+    validCandidates.sort((a, b) => {
+        const getScore = (cand) => {
+            const name = cand.name;
+            if (name === 'Magic Jammer' || name === 'Seven Tools of the Bandit') return 10;
+            if (name === 'Mirror Force' || name === 'Sakuretsu Armor') return 9;
+            if (name === 'Trap Hole') return 8;
+            if (name === 'Ring of Destruction') return 7;
+            if (name === 'Mystical Space Typhoon') return 6;
+            return 1;
+        };
+        return getScore(b) - getScore(a);
+    });
+
+    return validCandidates[0];
+}
+
+function aiCheckChain(candidates) {
+    // Use the same selection logic as Phase Response
+    return aiSelectBestResponse(candidates);
+}

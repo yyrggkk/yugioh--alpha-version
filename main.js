@@ -1,3 +1,4 @@
+// --- OPPONENT AI FLOW ---
 // =========================================
 // 1. GAME STATE & UTILS
 // =========================================
@@ -328,81 +329,13 @@ const ChainManager = {
     },
 
     // AI Decision Logic for Phase Response (Traps/Quick-Plays)
+    // These functions are defined in ai.js but called from here
     aiSelectBestResponse: function (candidates) {
-        if (!candidates || candidates.length === 0) return null;
-
-        // Priority order for activation:
-        // 1. Destruction effects when player has monsters (Trap Hole, etc.)
-        // 2. Burn damage when player has monsters (Just Desserts)
-        // 3. Utility traps
-
-        const playerMonsters = document.querySelectorAll('.player-zone.monster-zone .card').length;
-
-        for (let cand of candidates) {
-            const name = cand.name;
-
-            // Trap Hole - activate if player just summoned a monster with 1000+ ATK
-            if (name === 'Trap Hole') {
-                // Check if there's a recently summoned monster
-                const recentSummon = document.querySelector('.player-zone.monster-zone .card');
-                if (recentSummon) {
-                    const atk = parseInt(recentSummon.getAttribute('data-atk') || 0);
-                    if (atk >= 1000) return cand;
-                }
-            }
-
-            // Just Desserts - activate if player has monsters
-            if (name === 'Just Desserts' && playerMonsters > 0) {
-                return cand;
-            }
-
-            // Waboku - activate if being attacked (would need battle state check)
-            if (name === 'Waboku' && battleState.isAttacking) {
-                return cand;
-            }
-
-            // Magic Jammer - activate if player is activating a spell
-            if (name === 'Magic Jammer' && ChainManager.stack.length > 0) {
-                const lastCard = ChainManager.stack[ChainManager.stack.length - 1].card;
-                const category = lastCard.getAttribute('data-card-category');
-                if (category === 'spell') return cand;
-            }
-        }
-
-        // No good activation opportunity
-        return null;
+        return aiSelectBestResponse(candidates);
     },
 
     aiCheckChain: function (candidates) {
-        // Simple Heuristic AI
-        // 1. Mirror Force Logic
-        if (battleState.isAttacking && battleState.attackerCard) {
-            const mirrorForce = candidates.find(c => c.name === 'Mirror Force');
-            if (mirrorForce) return mirrorForce;
-
-            const sakuretsu = candidates.find(c => c.name === 'Sakuretsu Armor');
-            if (sakuretsu) return sakuretsu;
-
-            const magicCylinder = candidates.find(c => c.name === 'Magic Cylinder');
-            if (magicCylinder) return magicCylinder;
-        }
-
-        // 2. MST Logic
-        // If chain has something worth destroying? Or just End Phase?
-        // Or if Player has face-up spells (Field/Continuous)
-        const mst = candidates.find(c => c.name === 'Mystical Space Typhoon');
-        if (mst) {
-            // Check targets
-            const playerFaceUps = document.querySelectorAll('.player-zone.spell-trap-zone .card.face-up, .player-zone.field-zone .card.face-up');
-            if (playerFaceUps.length > 0) return mst;
-        }
-
-        // 3. Chainable Damage (Just Desserts etc) - Always chain if possible?
-        // Maybe wait for higher links? For now, yes.
-        const burn = candidates.find(c => ['Just Desserts', 'Secret Barrel', 'Ring of Destruction'].includes(c.name));
-        if (burn) return burn;
-
-        return null;
+        return aiCheckChain(candidates);
     },
 
     findCandidates: function (player) {
@@ -1380,6 +1313,7 @@ function proceedToMainPhase() {
 }
 
 // --- NEW: Centralized Activation Validation ---
+// --- NEW: Centralized Activation Validation ---
 function validateActivation(card, isChainLink1 = true) {
     if (!card) return false;
     if (ChainManager.isResolving) return false;
@@ -1387,27 +1321,28 @@ function validateActivation(card, isChainLink1 = true) {
     const type = card.getAttribute('data-type') || "";
     const speed = parseInt(card.getAttribute('data-speed') || "1");
     const setTurn = parseInt(card.getAttribute('data-set-turn') || "-1");
-    // const isSet = card.classList.contains('face-down'); // Not strictly needed if data-set-turn is reliable
+
+    // Ownership Check
+    const owner = getOwner(card);
+    const isMyTurn = (owner === 'player' && isPlayerTurn) || (owner === 'opponent' && !isPlayerTurn);
 
     // 0. LOCATION RESTRICTIONS
     const isHand = card.parentElement && card.parentElement.classList.contains('hand-container');
     const isTrap = type.includes('Trap');
     const isQuickPlay = type.includes('Quick-Play');
 
-    // Rule: Traps cannot activate from Hand (unless specifically implied by effect, which we act as if doesn't exist for generic engine yet)
+    // Rule: Traps cannot activate from Hand (unless specifically implied by effect)
     // Rule: Quick-Play Spells can activate from Hand during YOUR turn, but NOT Opponent's turn.
     if (isHand) {
         if (isTrap) {
-            // log("Failed Hand Trap Rule: Cannot activate Trap from Hand.");
             return false;
         }
-        if (isQuickPlay && !isPlayerTurn) {
+        if (isQuickPlay && !isMyTurn) {
             // log("Failed Quick-Play Hand Rule: Cannot activate QP from Hand on Opponent Turn.");
             return false;
         }
 
         // Check if there's space in S/T zone to place the card
-        const owner = getOwner(card);
         const zoneSelector = (owner === 'player') ? '#p-s1, #p-s2, #p-s3' : '.opp-zone.spell-trap-zone';
         const zones = document.querySelectorAll(zoneSelector);
         let hasSpace = false;
@@ -1416,7 +1351,6 @@ function validateActivation(card, isChainLink1 = true) {
         });
 
         if (!hasSpace) {
-            // No space in S/T zone to place the card
             return false;
         }
 
@@ -1449,8 +1383,8 @@ function validateActivation(card, isChainLink1 = true) {
 
     // 3. PHASE RULES (Speed 1 only in Main Phases)
     if (speed === 1) {
-        if (!isPlayerTurn) {
-            log(`Failed Speed 1 Rule: Not Player Turn.`);
+        if (!isMyTurn) {
+            // log(`Failed Speed 1 Rule: Not My Turn.`);
             return false; // Speed 1 only in own turn
         }
         if (currentPhase !== 'MP1' && currentPhase !== 'MP2') return false;
@@ -1507,399 +1441,9 @@ function switchTurn() {
     }
 }
 
-// --- OPPONENT AI FLOW ---
-function oppDrawPhase() {
-    if (gameState.gameOver) return;
-    drawOpponentCard();
-    // Check if Player wants to respond to Draw Phase
-    ChainManager.checkPhaseResponse('player', oppStandbyPhase);
-}
 
-function oppStandbyPhase() {
-    if (gameState.gameOver) return;
-    setPhaseText('SP', "STANDBY PHASE");
-    const spells = document.querySelectorAll('.spell-trap-zone .card.face-up');
-    spells.forEach(s => {
-        if (s.getAttribute('data-name') === 'Burning Land') {
-            updateLP(500, 'opponent'); // Opponent Turn = Opponent takes damage
-        }
-    });
+// AI functions have been moved to ai.js
 
-    // Check Response before Main Phase
-    ChainManager.checkPhaseResponse('player', oppMainPhase);
-}
-
-function oppMainPhase() {
-    if (gameState.gameOver) return;
-    setPhaseText('MP1', "MAIN PHASE 1");
-    currentPhase = 'MP1';
-    updateContinuousEffects();
-
-    log("Opponent Main Phase 1: Thinking...");
-
-    setTimeout(() => {
-        // AI LOGIC
-        let hasSummoned = false;
-
-        // 1. MONSTER HANDLING
-        // Sort monsters by ATK desc
-        const monsters = oppHandData.map((c, i) => ({ ...c, index: i }))
-            .filter(c => c.category === 'monster')
-            .sort((a, b) => b.atk - a.atk);
-
-        const myMonsters = document.querySelectorAll('.opp-zone.monster-zone .card');
-        const myTributeCount = myMonsters.length;
-        const slots = 3 - myTributeCount; // Assuming 3 slots max for now based on zones
-
-        if (slots > 0 && monsters.length > 0) {
-            // Check for Tribute Summon
-            // Check for Tribute Summon
-            const tributeCandidate = monsters.find(c => c.level >= 5);
-            if (tributeCandidate) {
-                const required = tributeCandidate.level >= 7 ? 2 : 1;
-
-                // Smarter Selection
-                // Find weakest monsters to tribute
-                const myMonstersArray = Array.from(myMonsters).map(el => ({
-                    el: el,
-                    atk: parseInt(el.getAttribute('data-atk'))
-                })).sort((a, b) => a.atk - b.atk);
-
-                if (myMonstersArray.length >= required) {
-                    // Check if worthwhile
-                    let fodderSumAtk = 0;
-                    const fodder = [];
-                    for (let k = 0; k < required; k++) {
-                        fodder.push(myMonstersArray[k]);
-                        fodderSumAtk += myMonstersArray[k].atk;
-                    }
-
-                    // Strict Logic: Only tribute if Candidate > Max(Fodder ATK)
-                    const maxFodderAtk = Math.max(...fodder.map(f => f.atk));
-
-                    // Allow tribute if new monster is stronger OR fodder is very weak (<= 1200)
-                    if (parseInt(tributeCandidate.atk) > maxFodderAtk || maxFodderAtk <= 1200) {
-                        log(`Opponent tributes ${required} monster(s) to summon ${tributeCandidate.name}!`);
-                        fodder.forEach(f => sendToGraveyard(f.el, 'opponent'));
-                        executeOpponentPlay(tributeCandidate, 'summon');
-                        hasSummoned = true;
-                    }
-                }
-            }
-
-            // Standard Summon / Set
-            if (!hasSummoned) {
-                const bestMonster = monsters[0];
-                const playerBestAtk = getPlayerBestAtk();
-
-                // DECISION TREE
-                let action = 'set';
-                // If ATK is good enough to beat player or just high
-                if (parseInt(bestMonster.atk) >= playerBestAtk || parseInt(bestMonster.atk) >= 1600) {
-                    action = 'summon';
-                } else if (parseInt(bestMonster.def) >= 1500) {
-                    action = 'set';
-                } else {
-                    // Weak monster. Set as wall if we have no monsters, else hold?
-                    // For now, always play to field if empty
-                    action = 'set';
-                }
-
-                // Only if Level <= 4 (or we skipped tribute logic)
-                if (bestMonster.level <= 4) {
-                    executeOpponentPlay(bestMonster, action);
-                    hasSummoned = true;
-                }
-            }
-        }
-
-        // 2. BACKROW HANDLING
-        const spells = oppHandData.map((c, i) => ({ ...c, index: i }))
-            .filter(c => c.category === 'spell' || c.category === 'trap');
-
-        const openBackrow = document.querySelectorAll('.opp-zone.spell-trap-zone:empty');
-        let setCounts = 0;
-
-        spells.forEach(c => {
-            // Limit setting to avoid full backrow lock
-            if (setCounts < openBackrow.length && setCounts < 2) {
-                const type = c.type || '';
-                const isNormal = type.includes('Normal') || type.includes('Field'); // Treat Field as Normal logic for now
-
-                // AI NORMAL SPELL ACTIVATION LOGIC
-                if (isNormal) {
-                    // Decide if meaningful to activate
-                    // e.g. Pot of Greed -> Always
-                    // Raigeki/Dark Hole -> If player has monsters
-                    let shouldActivate = false;
-
-                    // Conditionals
-                    if (c.name === 'Pot of Greed') shouldActivate = true;
-                    if (c.name === 'Raigeki' || c.name === 'Dark Hole') {
-                        const playerMons = document.querySelectorAll('.player-zone.monster-zone .card').length;
-                        if (playerMons > 0) shouldActivate = true;
-                    }
-                    if (c.name === 'Monster Reborn') shouldActivate = true; // Simplified: Always try if you have it
-                    if (c.name === 'Change of Heart') {
-                        const playerMons = document.querySelectorAll('.player-zone.monster-zone .card').length;
-                        if (playerMons > 0) shouldActivate = true;
-                    }
-                    if (c.name === 'Heavy Storm') {
-                        const playerBackrow = document.querySelectorAll('.player-zone.spell-trap-zone .card').length;
-                        if (playerBackrow >= 1) shouldActivate = true;
-                    }
-
-                    if (shouldActivate) {
-                        log(`AI Activates Spell: ${c.name}`);
-                        executeOpponentPlay(c, 'activate');
-                    } else {
-                        // Set if bluffing or saving?
-                        // If it's Raigeki and no targets, maybe hold in hand?
-                        // For simplicity, hold in hand if not used.
-                    }
-                } else {
-                    // Traps / Quick-Plays -> Set
-                    executeOpponentPlay(c, 'set');
-                    setCounts++;
-                }
-            }
-        });
-
-        // End Phase / Battle Phase Transition
-        setTimeout(() => {
-            // Check Response before Battle Phase
-            ChainManager.checkPhaseResponse('player', oppBattlePhase);
-        }, 1000);
-
-    }, 1500);
-}
-
-function getPlayerBestAtk() {
-    let max = 0;
-    document.querySelectorAll('.player-zone.monster-zone .card.pos-atk').forEach(c => {
-        const atk = parseInt(c.getAttribute('data-atk'));
-        if (atk > max) max = atk;
-    });
-    // Check DEF of DEF pos monsters too? (To beat them)
-    document.querySelectorAll('.player-zone.monster-zone .card.pos-def').forEach(c => {
-        const def = parseInt(c.getAttribute('data-def'));
-        // If we want to beat it, we need ATK > DEF. 
-        if (def > max) max = def;
-    });
-    return max;
-}
-
-function executeOpponentPlay(cardData, action) {
-    if (!cardData) return;
-
-    // Remove from Hand Data
-    const index = oppHandData.findIndex(c => c.name === cardData.name && c.desc === cardData.desc); // Simple match
-    if (index > -1) {
-        oppHandData.splice(index, 1);
-        updateCounters();
-        // Remove visual card (last one)
-        const handEl = document.querySelector('.opponent-hand-container .opponent-hand-card');
-        if (handEl) handEl.remove();
-    }
-
-    // Determine Zone
-    let targetZone = null;
-    let zonesSelector = action === 'activate' || cardData.category !== 'monster'
-        ? '.opp-zone.spell-trap-zone:empty'
-        : '.opp-zone.monster-zone:empty';
-
-    targetZone = document.querySelector(zonesSelector);
-    if (!targetZone) { log("AI Error: No Zone Avail"); return; }
-
-    // CSS Class
-    let cssClass = '';
-    if (cardData.category === 'monster') {
-        cssClass = (action === 'summon' || action === 'special-summon') ? 'face-up pos-atk' : 'face-down pos-def';
-    } else {
-        cssClass = 'face-down pos-atk'; // AI mostly Sets
-    }
-
-    const newCard = document.createElement('div');
-    newCard.className = `card ${cssClass}`;
-    newCard.setAttribute('data-turn', turnCount);
-    newCard.setAttribute('data-attacked', 'false');
-    const uid = generateUID();
-    newCard.setAttribute('data-uid', uid);
-
-    for (let k in cardData) {
-        if (k !== 'index') { // Don't add internal index
-            if (k === 'category') {
-                newCard.setAttribute('data-card-category', cardData[k]);
-            } else if (k === 'type') {
-                // Use humanReadableCardType for consistent display
-                const displayType = cardData.humanReadableCardType || cardData.full_type || cardData.type;
-                newCard.setAttribute('data-type', displayType);
-            } else {
-                newCard.setAttribute('data-' + k, cardData[k]);
-            }
-        }
-    }
-
-    // Important Stats
-    newCard.setAttribute('data-original-atk', cardData.atk);
-    newCard.setAttribute('data-original-def', cardData.def);
-    newCard.setAttribute('data-owner', 'opponent');
-
-    if (action === 'set') newCard.setAttribute('data-set-turn', turnCount);
-
-    if (cssClass.includes('face-up')) {
-        newCard.style.backgroundImage = `url('${cardData.img}')`;
-        if (cardData.category === 'monster') {
-            newCard.innerHTML = `<div class="stats-bar"><span class="stat-val stat-atk">${cardData.atk}</span><span class="stat-val stat-def">${cardData.def}</span></div>`;
-        }
-    } else {
-        // Face down
-        newCard.style.backgroundImage = `var(--card-back-url)`;
-    }
-
-    targetZone.appendChild(newCard);
-    log(`Opponent ${action}s a card.`);
-
-    if (action === 'activate') {
-        // Trigger effect immediately (as Chain Link 1)
-        // We use a small delay to allow DOM to update
-        setTimeout(() => {
-            activateSetCard(newCard, true);
-        }, 500);
-    }
-}
-
-// --- AI BATTLE PHASE ---
-// --- AI BATTLE PHASE ---
-function oppBattlePhase() {
-    if (gameState.gameOver) return;
-    setPhaseText('BP', "BATTLE PHASE");
-    currentPhase = 'BP';
-    updateContinuousEffects();
-
-    log("Opponent Battle Phase");
-
-    setTimeout(() => {
-        // Get attackers ONCE, but process them sequentially
-        const myAttackers = Array.from(document.querySelectorAll('.opp-zone.monster-zone .card.pos-atk'));
-
-        // Recursive function to handle sequential attacks
-        const executeAttackSequence = (index) => {
-            if (index >= myAttackers.length || gameState.gameOver) {
-                // Done with all attacks
-                setTimeout(() => {
-                    ChainManager.checkPhaseResponse('player', oppMainPhase2);
-                }, 1000);
-                return;
-            }
-
-            const attacker = myAttackers[index];
-
-            // Validation: Check if still on field and able to attack
-            if (!attacker.closest('.opp-zone') ||
-                attacker.getAttribute('data-attacked') === 'true' ||
-                attacker.getAttribute('data-disable-attack') === 'true') {
-
-                // Skip this attacker
-                executeAttackSequence(index + 1);
-                return;
-            }
-
-            // DYNAMIC TARGET SELECTION (Re-scan board)
-            const playerMonsters = Array.from(document.querySelectorAll('.player-zone.monster-zone .card'));
-
-            let target = null;
-            let isDirect = false;
-
-            if (playerMonsters.length === 0) {
-                isDirect = true; // Direct Attack
-            } else {
-                // Find beatable target
-                const atkVal = parseInt(attacker.getAttribute('data-atk'));
-                let bestTarget = null;
-                let maxThreat = -1;
-
-                playerMonsters.forEach(pm => {
-                    const isDef = pm.classList.contains('pos-def');
-                    const pAtk = parseInt(pm.getAttribute('data-atk'));
-                    const pDef = parseInt(pm.getAttribute('data-def'));
-
-                    if (isDef) {
-                        if (pm.classList.contains('face-down')) {
-                            // Hit Face-down. High priority.
-                            if (maxThreat < 0) { maxThreat = 0; bestTarget = pm; }
-                        } else {
-                            if (atkVal > pDef) {
-                                if (pDef > maxThreat) { maxThreat = pDef; bestTarget = pm; }
-                            }
-                        }
-                    } else {
-                        if (atkVal > pAtk) {
-                            if (pAtk > maxThreat) { maxThreat = pAtk; bestTarget = pm; }
-                        }
-                    }
-                });
-                if (bestTarget) target = bestTarget;
-            }
-
-            // EXECUTE OR SKIP
-            if (target || isDirect) {
-                log(`Opponent attacks ${isDirect ? 'Directly' : target.getAttribute('data-name')}!`);
-                battleState.attackerCard = attacker;
-
-                if (isDirect) performDirectAttack(attacker);
-                else resolveAttack(attacker, target);
-
-                // Wait for resolution animation before next attack
-                const nextStep = () => {
-                    if (gameState.isPaused) {
-                        // Wait/Poll until unpaused
-                        setTimeout(nextStep, 500);
-                    } else {
-                        executeAttackSequence(index + 1);
-                    }
-                };
-
-                setTimeout(nextStep, 2500);
-            } else {
-                // No valid target? Skip.
-                executeAttackSequence(index + 1);
-            }
-        };
-
-        // Start Sequence
-        executeAttackSequence(0);
-
-    }, 1000);
-}
-
-function oppMainPhase2() {
-    if (gameState.gameOver) return;
-    setPhaseText('MP2', "MAIN PHASE 2");
-    currentPhase = 'MP2';
-    updateContinuousEffects();
-    log("Opponent Main Phase 2");
-
-    // Logic: Set any remaining Spells? for now simple pass
-    setTimeout(() => {
-        // Prompt at End of MP2 (Before EP)
-        ChainManager.checkPhaseResponse('player', oppEndPhase);
-    }, 1000);
-}
-
-function oppEndPhase() {
-    if (gameState.gameOver) return;
-    setPhaseText('EP', "END PHASE");
-    currentPhase = 'EP'; // Important: Update phase var
-    log("Opponent End Phase");
-
-    updateContinuousEffects();
-
-    setTimeout(() => {
-        // Prompt at End of EP (Before Turn Change)
-        ChainManager.checkPhaseResponse('player', switchTurn);
-    }, 1000);
-}
 
 function updateContinuousEffects() {
     const activeSpells = document.querySelectorAll('.spell-trap-zone .card.face-up');
@@ -2422,14 +1966,13 @@ function activateSetCard(cardOverride = null, force = false) {
 
     // FIX: If Manual Activation (User Click OR Modal Click) and card belongs to Opponent -> BLOCK
     // Check if cardOverride implies UI interaction (selectedChainCard)
+    // Check if cardOverride implies UI interaction (selectedChainCard)
     const isUIAction = !cardOverride || (cardOverride === selectedChainCard);
 
-    // EXCEPTION: If AI is activating, cardOverride is set, but it shouldn't be selectedChainCard (unless AI sets it?)
-    // But AI calls activateSetCard(chosen.el, false). chosen.el might be anything.
-    // Assuming selectedChainCard is ONLY strictly set by UI Modal.
-    // If AI sets it, we might block AI. But AI doesn't seem to set selectedChainCard global.
+    console.log(`[AI-DEBUG] activateSetCard: Name=${cardEl.getAttribute('data-name')} Force=${force} UI=${isUIAction} Controller=${controller}`);
 
     if (isUIAction && controller === 'opponent') {
+        console.log("[AI-DEBUG] Blocked Opponent Card Activation via UI logic.");
         log("Cannot activate Opponent's card!");
         return;
     }

@@ -252,45 +252,32 @@ function buildFullDeck($db) {
     return $deck;
 }
 // // Build Decks with 20 cards now
-$playerDeck = [
-    $cardDB['geminielf'],
-    $cardDB['raigeki'],
-    $cardDB['dianketo'],
-    $cardDB['ookazi'],
-    $cardDB['mst'],
-    $cardDB['mst'],
-    $cardDB['bannerofcourage'],
-    $cardDB['burningland'],
-    $cardDB['axeofdespair'],
-    $cardDB['malevolentnuzzler'],
-    $cardDB['rushrecklessly'],
-    $cardDB['geminielf'],
-    $cardDB['malevolentnuzzler'],
-    $cardDB['mst'],
-    $cardDB['pot'],
-    $cardDB['reinforcements'],
-    $cardDB['mst'],
-];
-$oppDeck=[
-    $cardDB['geminielf'],
-    $cardDB['raigeki'],
-    $cardDB['dianketo'],
-    $cardDB['ookazi'],
-    $cardDB['mst'],
-    $cardDB['mst'],
-    $cardDB['bannerofcourage'],
-    $cardDB['burningland'],
-    $cardDB['axeofdespair'],
-    $cardDB['malevolentnuzzler'],
-    $cardDB['rushrecklessly'],
-    $cardDB['geminielf'],
-    $cardDB['malevolentnuzzler'],
-    $cardDB['mst'],
-    $cardDB['pot'],
-    $cardDB['reinforcements'],
-    $cardDB['mst'],
-];
-// $oppDeck    = buildRandomDeck($cardDB, 20);
+$playerDeck = buildRandomDeck($cardDB, 20);
+// $oppDeck=[
+//     $cardDB['geminielf'],
+//     $cardDB['raigeki'],
+//     $cardDB['dianketo'],
+//     $cardDB['mst'],
+//     $cardDB['mst'],
+//     $cardDB['bannerofcourage'],
+//     $cardDB['burningland'],
+//     $cardDB['axeofdespair'],
+//     $cardDB['malevolentnuzzler'],
+//     $cardDB['rushrecklessly'],
+//     $cardDB['geminielf'],
+//     $cardDB['malevolentnuzzler'],
+//     $cardDB['mst'],
+//     $cardDB['ookazi'],
+//     $cardDB['pot'],
+//     $cardDB['reinforcements'],
+//     $cardDB['mst'],
+//     $cardDB['geminielf'],
+//     $cardDB['geminielf'],
+//     $cardDB['geminielf'],
+//     $cardDB['geminielf'],
+//     $cardDB['geminielf'],
+// ];
+$oppDeck    = buildRandomDeck($cardDB, 20);
 
 // Initial Field State
 $playerMonsters = [0 => null, 1 => null, 2 => null];
@@ -301,11 +288,11 @@ $playerExDeck   = [];
 // Opponent Field - Testing Setup (Giving them some strong classic monsters)
 $oppMonsters = [
     0 => null,
-    1 => $cardDB['geminielf'],
+    1 => null,
     2 => null
 ];
-$oppSpells = [0 => null, 1 => $cardDB['bannerofcourage'], 2 => null];
-$oppGY = [$cardDB['summonedskull']];
+$oppSpells = [0 => null, 1 => null, 2 => null];
+$oppGY = [];
 $oppExDeck = [];
 
 $playerHand = [];
