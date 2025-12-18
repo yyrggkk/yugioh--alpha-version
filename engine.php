@@ -265,17 +265,11 @@ $playerDeck = [
     $cardDB['malevolentnuzzler'],
     $cardDB['rushrecklessly'],
     $cardDB['geminielf'],
-    $cardDB['spellbindingcircle'],
-    $cardDB['justdesserts'],
-    $cardDB['mst'],
+    $cardDB['malevolentnuzzler'],
+    $cardDB['axeofdespair'],
     $cardDB['geminielf'],
-    $cardDB['mst'],
-    $cardDB['pot'],
-    $cardDB['monsterreborn'],
     $cardDB['reinforcements'],
-    $cardDB['callofthehaunted'],
-    
-    
+    $cardDB['malevolentnuzzler'],
 ];
 $oppDeck    = buildRandomDeck($cardDB, 20);
 
@@ -287,8 +281,8 @@ $playerExDeck   = [];
 
 // Opponent Field - Testing Setup (Giving them some strong classic monsters)
 $oppMonsters = [
-    0 => $cardDB['blueeyes'],
-    1 => $cardDB['summonedskull'],
+    0 => null,
+    1 => $cardDB['geminielf'],
     2 => null
 ];
 $oppSpells = [0 => null, 1 => $cardDB['bannerofcourage'], 2 => null];
