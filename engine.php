@@ -133,13 +133,13 @@ $rawDB = [
     // Equip Spells
     'axeofdespair' => [
         "id" => 40619825, "name" => "Axe of Despair", "type" => "Spell Card", "humanReadableCardType" => "Equip Spell", "frameType" => "spell", 
-        "desc" => "The equipped monster gains 1000 ATK.", "race" => "Equip", 
+        "desc" => "The equipped monster gains 1000 ATK. When this card is sent from the field to the GY: You can Tribute 1 monster; place this card on top of your Deck.", "race" => "Equip", 
         "image_url" => "https://images.ygoprodeck.com/images/cards/40619825.jpg",
         "subType" => "Equip", "speed" => 1
     ],
     'malevolentnuzzler' => [
         "id" => 99597615, "name" => "Malevolent Nuzzler", "type" => "Spell Card", "humanReadableCardType" => "Equip Spell", "frameType" => "spell", 
-        "desc" => "The equipped monster gains 700 ATK.", "race" => "Equip", 
+        "desc" => "The equipped monster gains 700 ATK. When this card is sent from the field to the Graveyard: You can pay 500 LP; place this card on the top of your Deck.", "race" => "Equip", 
         "image_url" => "https://images.ygoprodeck.com/images/cards/99597615.jpg",
         "subType" => "Equip", "speed" => 1
     ],
