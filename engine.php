@@ -266,12 +266,31 @@ $playerDeck = [
     $cardDB['rushrecklessly'],
     $cardDB['geminielf'],
     $cardDB['malevolentnuzzler'],
-    $cardDB['axeofdespair'],
-    $cardDB['geminielf'],
+    $cardDB['mst'],
+    $cardDB['pot'],
     $cardDB['reinforcements'],
-    $cardDB['malevolentnuzzler'],
+    $cardDB['mst'],
 ];
-$oppDeck    = buildRandomDeck($cardDB, 20);
+$oppDeck=[
+    $cardDB['geminielf'],
+    $cardDB['raigeki'],
+    $cardDB['dianketo'],
+    $cardDB['ookazi'],
+    $cardDB['mst'],
+    $cardDB['mst'],
+    $cardDB['bannerofcourage'],
+    $cardDB['burningland'],
+    $cardDB['axeofdespair'],
+    $cardDB['malevolentnuzzler'],
+    $cardDB['rushrecklessly'],
+    $cardDB['geminielf'],
+    $cardDB['malevolentnuzzler'],
+    $cardDB['mst'],
+    $cardDB['pot'],
+    $cardDB['reinforcements'],
+    $cardDB['mst'],
+];
+// $oppDeck    = buildRandomDeck($cardDB, 20);
 
 // Initial Field State
 $playerMonsters = [0 => null, 1 => null, 2 => null];
@@ -304,7 +323,9 @@ function renderCardHTML($slotData, $isHand = false) {
     // Core Attributes
     $attr = ' data-name="' . htmlspecialchars($card['name']) . '"';
     $attr .= ' data-id="' . htmlspecialchars($card['id']) . '"';
-    $attr .= ' data-type="' . htmlspecialchars($card['full_type']) . '"';
+    // Use humanReadableCardType directly for consistent display
+    $displayType = isset($card['humanReadableCardType']) ? $card['humanReadableCardType'] : (isset($card['full_type']) ? $card['full_type'] : $card['type']);
+    $attr .= ' data-type="' . htmlspecialchars($displayType) . '"';
     $attr .= ' data-atk="' . htmlspecialchars($card['atk']) . '"';
     $attr .= ' data-def="' . htmlspecialchars($card['def']) . '"';
     $attr .= ' data-desc="' . htmlspecialchars($card['desc']) . '"';

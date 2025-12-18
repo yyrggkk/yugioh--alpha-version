@@ -327,6 +327,52 @@ const ChainManager = {
         }
     },
 
+    // AI Decision Logic for Phase Response (Traps/Quick-Plays)
+    aiSelectBestResponse: function (candidates) {
+        if (!candidates || candidates.length === 0) return null;
+
+        // Priority order for activation:
+        // 1. Destruction effects when player has monsters (Trap Hole, etc.)
+        // 2. Burn damage when player has monsters (Just Desserts)
+        // 3. Utility traps
+
+        const playerMonsters = document.querySelectorAll('.player-zone.monster-zone .card').length;
+
+        for (let cand of candidates) {
+            const name = cand.name;
+
+            // Trap Hole - activate if player just summoned a monster with 1000+ ATK
+            if (name === 'Trap Hole') {
+                // Check if there's a recently summoned monster
+                const recentSummon = document.querySelector('.player-zone.monster-zone .card');
+                if (recentSummon) {
+                    const atk = parseInt(recentSummon.getAttribute('data-atk') || 0);
+                    if (atk >= 1000) return cand;
+                }
+            }
+
+            // Just Desserts - activate if player has monsters
+            if (name === 'Just Desserts' && playerMonsters > 0) {
+                return cand;
+            }
+
+            // Waboku - activate if being attacked (would need battle state check)
+            if (name === 'Waboku' && battleState.isAttacking) {
+                return cand;
+            }
+
+            // Magic Jammer - activate if player is activating a spell
+            if (name === 'Magic Jammer' && ChainManager.stack.length > 0) {
+                const lastCard = ChainManager.stack[ChainManager.stack.length - 1].card;
+                const category = lastCard.getAttribute('data-card-category');
+                if (category === 'spell') return cand;
+            }
+        }
+
+        // No good activation opportunity
+        return null;
+    },
+
     aiCheckChain: function (candidates) {
         // Simple Heuristic AI
         // 1. Mirror Force Logic
@@ -361,12 +407,13 @@ const ChainManager = {
 
     findCandidates: function (player) {
         const zoneSelector = (player === 'player') ? '.player-zone' : '.opp-zone';
+        const handSelector = (player === 'player') ? '#playerHand .hand-card' : '.opponent-hand-container .opponent-hand-card';
 
         // Check Hand (Quick-Plays allowed from hand if Turn Player)
         // Check Field (Set Cards)
         const sources = [
             ...document.querySelectorAll(`${zoneSelector}.spell-trap-zone .card.face-down`),
-            ...document.querySelectorAll(`${zoneSelector} .hand-card`)
+            ...document.querySelectorAll(handSelector)
         ];
 
         const validCards = [];
@@ -399,8 +446,10 @@ const ChainManager = {
             }
             // --------------------------------------------
 
-            // Clean up global state if needed...
-            if (!isPlayerTurn && gameState.pendingOpponentAction) resumeOpponentTurn();
+            // Clean up global state and resume pending actions
+            if (gameState.pendingOpponentAction) {
+                resumeOpponentTurn();
+            }
             return;
         }
 
@@ -491,6 +540,41 @@ const ChainManager = {
         log(`Candidates found: ${candidates.length}`);
 
         if (candidates.length > 0) {
+            // If checking for OPPONENT and they're AI, let AI decide automatically
+            if (player === 'opponent') {
+                log("AI Opponent has candidates. AI will decide whether to activate...");
+                gameState.pendingOpponentAction = onContinue;
+
+                // AI Decision Logic
+                const bestChoice = this.aiSelectBestResponse(candidates);
+
+                if (bestChoice) {
+                    log(`AI decided to activate: ${bestChoice.name}`);
+                    setTimeout(() => {
+                        // Activate the chosen card
+                        const cardEl = bestChoice.el;
+                        const isFromHand = cardEl.classList.contains('hand-card') || cardEl.classList.contains('opponent-hand-card');
+
+                        if (isFromHand) {
+                            // For Quick-Play from hand, would need to place on field
+                            // For now, AI doesn't activate from hand during player turn
+                            log("AI chose not to activate (hand cards not implemented for AI).");
+                            resumeOpponentTurn();
+                        } else {
+                            // Activate set card
+                            activateSetCard(cardEl, true);
+                        }
+                    }, 800);
+                } else {
+                    log("AI chose not to activate.");
+                    setTimeout(() => {
+                        resumeOpponentTurn();
+                    }, 500);
+                }
+                return;
+            }
+
+            // Player's cards - show UI
             log("Opening Phase Response Modal...");
             gameState.pendingOpponentAction = onContinue;
 
@@ -499,7 +583,7 @@ const ChainManager = {
             const list = document.getElementById('activationList');
             const text = document.getElementById('activationText');
 
-            text.textContent = `Opponent Phase: ${currentPhase}. Activate a card?`;
+            text.textContent = `End of ${currentPhase}. Activate a card?`;
             list.innerHTML = '';
             selectedChainCard = null;
 
@@ -1152,13 +1236,69 @@ function confirmActivation() {
     }
     const modal = document.getElementById('activationModal');
     modal.classList.remove('active');
-    window._currentCancelCallback = null; // Clear cancel trigger
 
-    // Activate logic
-    // Note: If we support Hand cards here, we need to check source.
-    // For now, assuming Set Cards:
-    // Link 1 (or next link) logic
-    activateSetCard(selectedChainCard.el, true);
+    const cardEl = selectedChainCard.el;
+
+    // Store the callback before clearing it
+    const pendingCallback = window._currentCancelCallback;
+    window._currentCancelCallback = null;
+
+    // Check if card is from hand (Quick-Play Spell)
+    const isFromHand = cardEl.classList.contains('hand-card');
+
+    if (isFromHand) {
+        // Place card on field first, then activate
+        const cardData = {
+            name: cardEl.getAttribute('data-name'),
+            type: cardEl.getAttribute('data-type'),
+            desc: cardEl.getAttribute('data-desc'),
+            img: cardEl.getAttribute('data-img'),
+            category: cardEl.getAttribute('data-card-category'),
+            race: cardEl.getAttribute('data-race'),
+            subType: cardEl.getAttribute('data-sub-type'),
+            speed: cardEl.getAttribute('data-speed')
+        };
+
+        // Find empty spell/trap zone
+        const zones = ['p-s1', 'p-s2', 'p-s3'];
+        let targetZone = null;
+        for (let id of zones) {
+            if (document.getElementById(id).children.length === 0) {
+                targetZone = document.getElementById(id);
+                break;
+            }
+        }
+
+        if (!targetZone) {
+            alert("S/T Zones Full!");
+            return;
+        }
+
+        // Create card on field
+        const newCard = document.createElement('div');
+        newCard.className = 'card face-up pos-atk';
+        newCard.setAttribute('data-turn', turnCount);
+        const uid = generateUID();
+        newCard.setAttribute('data-uid', uid);
+
+        for (let k in cardData) {
+            if (k === 'category') newCard.setAttribute('data-card-category', cardData[k]);
+            else if (cardData[k]) newCard.setAttribute('data-' + k, cardData[k]);
+        }
+
+        newCard.style.backgroundImage = `url('${cardData.img}')`;
+        targetZone.appendChild(newCard);
+
+        // Remove from hand
+        cardEl.remove();
+
+        // Now activate the field card
+        activateSetCard(newCard, true);
+    } else {
+        // Card is already set on field
+        activateSetCard(cardEl, true);
+    }
+
     selectedChainCard = null;
 }
 
@@ -1205,8 +1345,10 @@ function runNormalTurn() {
     if (playerDeckData.length === 0) { endDuel("You Lost! Deck is empty."); return; }
     setTimeout(() => {
         drawCard();
-        // Allow Opponent to response to Draw Phase?
-        ChainManager.checkPhaseResponse('opponent', proceedToMainPhase);
+        // Allow Player to respond first (Priority), then Opponent
+        ChainManager.checkPhaseResponse('player', () => {
+            ChainManager.checkPhaseResponse('opponent', proceedToMainPhase);
+        });
     }, 500);
 }
 
@@ -1223,16 +1365,17 @@ function proceedToMainPhase() {
             }
         });
 
-        // Check for Opponent Response in Standby Phase
-        ChainManager.checkPhaseResponse('opponent', () => {
-            setTimeout(() => {
-                setPhaseText('MP1', "MAIN PHASE 1");
-                log("Main Phase 1");
-                currentPhase = 'MP1';
-                updateContinuousEffects();
-            }, 500);
+        // Check for Player Response, then Opponent Response
+        ChainManager.checkPhaseResponse('player', () => {
+            ChainManager.checkPhaseResponse('opponent', () => {
+                setTimeout(() => {
+                    setPhaseText('MP1', "MAIN PHASE 1");
+                    log("Main Phase 1");
+                    currentPhase = 'MP1';
+                    updateContinuousEffects();
+                }, 500);
+            });
         });
-
     }, 1500);
 }
 
@@ -1262,6 +1405,21 @@ function validateActivation(card, isChainLink1 = true) {
             // log("Failed Quick-Play Hand Rule: Cannot activate QP from Hand on Opponent Turn.");
             return false;
         }
+
+        // Check if there's space in S/T zone to place the card
+        const owner = getOwner(card);
+        const zoneSelector = (owner === 'player') ? '#p-s1, #p-s2, #p-s3' : '.opp-zone.spell-trap-zone';
+        const zones = document.querySelectorAll(zoneSelector);
+        let hasSpace = false;
+        zones.forEach(zone => {
+            if (zone.children.length === 0) hasSpace = true;
+        });
+
+        if (!hasSpace) {
+            // No space in S/T zone to place the card
+            return false;
+        }
+
         // Normal Spells from Hand are handled by Phase Rules (Speed 1)
     }
 
@@ -1570,8 +1728,15 @@ function executeOpponentPlay(cardData, action) {
 
     for (let k in cardData) {
         if (k !== 'index') { // Don't add internal index
-            if (k === 'category') newCard.setAttribute('data-card-category', cardData[k]);
-            else newCard.setAttribute('data-' + k, cardData[k]);
+            if (k === 'category') {
+                newCard.setAttribute('data-card-category', cardData[k]);
+            } else if (k === 'type') {
+                // Use humanReadableCardType for consistent display
+                const displayType = cardData.humanReadableCardType || cardData.full_type || cardData.type;
+                newCard.setAttribute('data-type', displayType);
+            } else {
+                newCard.setAttribute('data-' + k, cardData[k]);
+            }
         }
     }
 
@@ -1715,17 +1880,25 @@ function oppMainPhase2() {
     updateContinuousEffects();
     log("Opponent Main Phase 2");
 
-    // Logic: Set any remaining Spells?
-    // For now proceed to End Phase
-    setTimeout(oppEndTurn, 1000);
+    // Logic: Set any remaining Spells? for now simple pass
+    setTimeout(() => {
+        // Prompt at End of MP2 (Before EP)
+        ChainManager.checkPhaseResponse('player', oppEndPhase);
+    }, 1000);
 }
 
-// oppEndTurn logic is now handled in oppMainPhase2, keeping this for fallback if needed
-function oppEndTurn() {
+function oppEndPhase() {
     if (gameState.gameOver) return;
-    setPhaseText('EP', "END PHASE"); // AI Visual update
-    log("Opponent ends turn.");
-    setTimeout(switchTurn, 1000);
+    setPhaseText('EP', "END PHASE");
+    currentPhase = 'EP'; // Important: Update phase var
+    log("Opponent End Phase");
+
+    updateContinuousEffects();
+
+    setTimeout(() => {
+        // Prompt at End of EP (Before Turn Change)
+        ChainManager.checkPhaseResponse('player', switchTurn);
+    }, 1000);
 }
 
 function updateContinuousEffects() {
@@ -1752,20 +1925,40 @@ function setPhase(phase) {
         updateContinuousEffects(); // Cleanup battle buffs
     }
 
-    currentPhase = phase;
-    phaseBtn.textContent = phase;
-    let text = "MAIN PHASE 1";
-    if (phase === 'BP') text = "BATTLE PHASE";
-    if (phase === 'MP2') text = "MAIN PHASE 2";
-    if (phase === 'EP') text = "END PHASE";
-    phaseText.textContent = text;
-    phaseMenu.classList.remove('active');
-    log(`Phase: ${text}`);
+    // Helper function to execute phase change
+    const executePhaseChange = () => {
+        currentPhase = phase;
+        phaseBtn.textContent = phase;
+        let text = "MAIN PHASE 1";
+        if (phase === 'BP') text = "BATTLE PHASE";
+        if (phase === 'MP2') text = "MAIN PHASE 2";
+        if (phase === 'EP') text = "END PHASE";
+        phaseText.textContent = text;
+        phaseMenu.classList.remove('active');
+        log(`Phase: ${text}`);
 
-    if (phase !== 'BP') cancelBattleMode();
-    updateContinuousEffects();
+        if (phase !== 'BP') cancelBattleMode();
+        updateContinuousEffects();
 
-    if (phase === 'EP') setTimeout(switchTurn, 1000);
+        // If entering End Phase, check for responses before ending turn
+        if (phase === 'EP') {
+            setTimeout(() => {
+                ChainManager.checkPhaseResponse('player', () => {
+                    ChainManager.checkPhaseResponse('opponent', switchTurn);
+                });
+            }, 1000);
+        }
+    };
+
+    // Add response checks before entering new phases (except from EP which already has it)
+    if (currentPhase !== 'EP') {
+        // Check for responses at end of current phase before moving to next
+        ChainManager.checkPhaseResponse('player', () => {
+            ChainManager.checkPhaseResponse('opponent', executePhaseChange);
+        });
+    } else {
+        executePhaseChange();
+    }
 }
 
 function setPhaseText(short, long) { currentPhase = short; phaseBtn.textContent = short; phaseText.textContent = long; }
@@ -1807,7 +2000,9 @@ function renderHandCard(card) {
     el.className = 'hand-card';
     el.style.backgroundImage = `url('${card.img}')`;
     el.setAttribute('data-name', card.name);
-    el.setAttribute('data-type', card.full_type);
+    // Use humanReadableCardType for consistent display
+    const displayType = card.humanReadableCardType || card.full_type || card.type;
+    el.setAttribute('data-type', displayType);
     el.setAttribute('data-atk', card.atk); el.setAttribute('data-def', card.def);
     el.setAttribute('data-original-atk', card.atk); el.setAttribute('data-original-def', card.def);
     el.setAttribute('data-desc', card.desc); el.setAttribute('data-img', card.img);
@@ -2287,7 +2482,7 @@ function activateSetCard(cardOverride = null, force = false) {
     };
 
     // Add into Chain
-    addToChain(cardEl, effectWrapper, isPlayerTurn ? 'player' : 'opponent');
+    addToChain(cardEl, effectWrapper, getController(cardEl));
 
     // HIDE MENU
     actionMenu.classList.remove('active');
