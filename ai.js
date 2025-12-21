@@ -5,14 +5,14 @@
 // --- AI OPPONENT TURN FLOW ---
 
 function oppDrawPhase() {
-    if (gameState.gameOver) return;
+    if (gameState.turnInfo.gameOver) return;
     drawOpponentCard();
     // Check if Player wants to respond to Draw Phase
     ChainManager.checkPhaseResponse('player', oppStandbyPhase);
 }
 
 function oppStandbyPhase() {
-    if (gameState.gameOver) return;
+    if (gameState.turnInfo.gameOver) return;
     setPhaseText('SP', "STANDBY PHASE");
     const spells = document.querySelectorAll('.spell-trap-zone .card.face-up');
     spells.forEach(s => {
@@ -26,7 +26,7 @@ function oppStandbyPhase() {
 }
 
 function oppMainPhase() {
-    if (gameState.gameOver) return;
+    if (gameState.turnInfo.gameOver) return;
     setPhaseText('MP1', "MAIN PHASE 1");
     currentPhase = 'MP1';
     updateContinuousEffects();
@@ -44,132 +44,140 @@ function oppMainPhase() {
     }, 1500);
 }
 
+// ==========================================
+// PHASE 3: STRATEGIC AI - MINIMAX INTEGRATION
+// ==========================================
+
 // Sequential AI "Think Loop" for Main Phase
+// NOW USES MINIMAX TO THINK 2 TURNS AHEAD!
 function oppMainPhaseStep() {
-    if (gameState.gameOver) return;
+    if (gameState.turnInfo.gameOver) return;
 
-    // PRIORITY 1: Monster Summon (if not summoned yet)
-    if (!gameState.aiMainPhaseState.hasSummoned) {
-        const monsters = oppHandData.map((c, i) => ({ ...c, index: i }))
-            .filter(c => c.category === 'monster')
-            .sort((a, b) => b.atk - a.atk);
-
-        const myMonsters = document.querySelectorAll('.opp-zone.monster-zone .card');
-        const myTributeCount = myMonsters.length;
-        const slots = 3 - myTributeCount;
-
-        if (slots > 0 && monsters.length > 0) {
-            // Check for Tribute Summon
-            const tributeCandidate = monsters.find(c => c.level >= 5);
-            if (tributeCandidate) {
-                const required = tributeCandidate.level >= 7 ? 2 : 1;
-                const myMonstersArray = Array.from(myMonsters).map(el => ({
-                    el: el,
-                    atk: parseInt(el.getAttribute('data-atk'))
-                })).sort((a, b) => a.atk - b.atk);
-
-                if (myMonstersArray.length >= required) {
-                    const fodder = [];
-                    for (let k = 0; k < required; k++) {
-                        fodder.push(myMonstersArray[k]);
-                    }
-                    const maxFodderAtk = Math.max(...fodder.map(f => f.atk));
-
-                    if (parseInt(tributeCandidate.atk) > maxFodderAtk || maxFodderAtk <= 1200) {
-                        log(`Opponent tributes ${required} monster(s) to summon ${tributeCandidate.name}!`);
-                        fodder.forEach(f => sendToGraveyard(f.el, 'opponent'));
-                        executeOpponentPlay(tributeCandidate, 'summon');
-                        gameState.aiMainPhaseState.hasSummoned = true;
-
-                        // Schedule next step
-                        setTimeout(() => oppMainPhaseStep(), 800);
-                        return;
-                    }
-                }
-            }
-
-            // Standard Summon / Set
-            const bestMonster = monsters[0];
-            if (bestMonster && bestMonster.level <= 4) {
-                const playerBestAtk = getPlayerBestAtk();
-                let action = 'set';
-
-                if (parseInt(bestMonster.atk) >= playerBestAtk || parseInt(bestMonster.atk) >= 1600) {
-                    action = 'summon';
-                } else if (parseInt(bestMonster.def) >= 1500) {
-                    action = 'set';
-                } else {
-                    action = 'set';
-                }
-
-                executeOpponentPlay(bestMonster, action);
-                gameState.aiMainPhaseState.hasSummoned = true;
-
-                // Schedule next step
-                setTimeout(() => oppMainPhaseStep(), 800);
-                return;
-            }
-        }
+    // Sync DOM to State to ensure AI sees the updated field
+    if (typeof syncDOMToGameState === 'function') {
+        syncDOMToGameState();
     }
 
-    // PRIORITY 2: Activate ONE Normal Spell (if beneficial)
-    const spells = oppHandData.map((c, i) => ({ ...c, index: i }))
-        .filter(c => c.category === 'spell' || c.category === 'trap');
+    // Use Minimax to find best move
+    log("[AI] Analyzing best move with Minimax...");
 
-    for (let c of spells) {
-        const type = c.type || '';
-        const humanType = c.humanReadableCardType || '';
-        const race = c.race || '';
-        const isNormal = type.includes('Normal') || type.includes('Field') || humanType.includes('Normal') || (race === 'Normal' && c.category === 'spell');
+    try {
+        const bestMove = Sim_findBestMove(gameState, 'opponent', AI_CONFIG.MINIMAX_DEPTH);
 
-        if (isNormal) {
-            const shouldAct = aiShouldActivate(c);
-            if (shouldAct) {
-                log(`AI Activates Spell: ${c.name}`);
-
-                // Set pending action BEFORE activation so chain resolution calls us back
-                gameState.pendingOpponentAction = oppMainPhaseStep;
-                executeOpponentPlay(c, 'activate');
-                return; // Wait for chain resolution to call us back
-            }
+        if (!bestMove) {
+            // No good moves found, pass to battle phase
+            log("[AI] No beneficial moves found. Passing to Battle Phase.");
+            setTimeout(() => {
+                ChainManager.checkPhaseResponse('player', oppBattlePhase);
+            }, 1000);
+            return;
         }
-    }
 
-    // PRIORITY 3: Set ONE Backrow Card (if space available)
-    const openBackrow = document.querySelectorAll('.opp-zone.spell-trap-zone:empty');
-    if (gameState.aiMainPhaseState.backrowSetCount < openBackrow.length && gameState.aiMainPhaseState.backrowSetCount < 2) {
-        for (let c of spells) {
-            const type = c.type || '';
-            const humanType = c.humanReadableCardType || '';
-            const race = c.race || '';
-            const isNormal = type.includes('Normal') || type.includes('Field') || humanType.includes('Normal') || (race === 'Normal' && c.category === 'spell');
+        log(`[AI] Best move: ${bestMove.type}`);
 
-            // Set Traps, Quick-Plays, or non-activatable Normal Spells
-            if (!isNormal || (isNormal && !aiShouldActivate(c))) {
-                const isQuickPlay = race === 'Quick-Play' || type.includes('Quick-Play') || humanType.includes('Quick-Play');
-
-                // Set Quick-Plays or Traps
-                if (isQuickPlay || c.category === 'trap') {
-                    executeOpponentPlay(c, 'set');
-                    gameState.aiMainPhaseState.backrowSetCount++;
-
-                    // Schedule next step
-                    setTimeout(() => oppMainPhaseStep(), 800);
-                    return;
-                }
-            }
+        // Execute the move chosen by Minimax
+        if (bestMove.type === 'PASS_PHASE') {
+            // AI wants to pass to next phase
+            log("[AI] Strategic pass to Battle Phase.");
+            setTimeout(() => {
+                ChainManager.checkPhaseResponse('player', oppBattlePhase);
+            }, 1000);
+            return;
         }
-    }
 
-    // PRIORITY 4: No more actions -> Proceed to Battle Phase
-    log("Opponent Main Phase complete. Proceeding...");
-    setTimeout(() => {
-        ChainManager.checkPhaseResponse('player', oppBattlePhase);
-    }, 1000);
+        // Execute the move
+        executeSimulatedMove(bestMove);
+
+    } catch (error) {
+        console.error('[AI] Minimax error:', error);
+        // Fallback: pass to battle phase
+        log("[AI] Error in AI brain, passing turn.");
+        setTimeout(() => {
+            ChainManager.checkPhaseResponse('player', oppBattlePhase);
+        }, 1000);
+    }
+}
+
+/**
+ * Execute a move decided by simulation
+ * @param {Move} move - Move object from Minimax
+ */
+function executeSimulatedMove(move) {
+    switch (move.type) {
+        case 'NORMAL_SUMMON':
+            log(`[AI] Summons ${move.card.name} in ATK position!`);
+            executeOpponentPlay(move.card, 'summon');
+            gameState.aiMainPhaseState.hasSummoned = true;
+
+            // Continue thinking
+            setTimeout(() => oppMainPhaseStep(), 800);
+            break;
+
+        case 'SET_MONSTER':
+            log(`[AI] Sets a monster in DEF position.`);
+            executeOpponentPlay(move.card, 'set');
+            gameState.aiMainPhaseState.hasSummoned = true;
+
+            // Continue thinking
+            setTimeout(() => oppMainPhaseStep(), 800);
+            break;
+
+        case 'SET_SPELL':
+            log(`[AI] Sets a Spell/Trap card.`);
+            executeOpponentPlay(move.card, 'set');
+            gameState.aiMainPhaseState.backrowSetCount++;
+
+            // Continue thinking
+            setTimeout(() => oppMainPhaseStep(), 800);
+            break;
+
+        case 'PASS_PHASE':
+            // AI decided best move is to pass to next phase
+            log(`[AI] Passing to next phase.`);
+            setTimeout(() => {
+                ChainManager.checkPhaseResponse('player', oppBattlePhase);
+            }, 1000);
+            break;
+
+        case 'PASS_TURN':
+            // AI has no beneficial moves, pass turn
+            log(`[AI] No beneficial moves. Passing turn.`);
+            setTimeout(() => {
+                ChainManager.checkPhaseResponse('player', oppBattlePhase);
+            }, 1000);
+            break;
+
+        case 'ATTACK':
+            // AI attacks a monster
+            log(`[AI] Attacking opponent's monster!`);
+            // The existing battle phase logic handles this
+            // Just pass to battle phase
+            setTimeout(() => {
+                ChainManager.checkPhaseResponse('player', oppBattlePhase);
+            }, 1000);
+            break;
+
+        case 'DIRECT_ATTACK':
+            // AI direct attacks
+            log(`[AI] Direct attack!`);
+            // The existing battle phase logic handles this
+            setTimeout(() => {
+                ChainManager.checkPhaseResponse('player', oppBattlePhase);
+            }, 1000);
+            break;
+
+        default:
+            // Unknown move type, pass
+            log(`[AI] Unknown move type: ${move.type}. Passing.`);
+            setTimeout(() => {
+                ChainManager.checkPhaseResponse('player', oppBattlePhase);
+            }, 1000);
+            break;
+    }
 }
 
 function oppBattlePhase() {
-    if (gameState.gameOver) return;
+    if (gameState.turnInfo.gameOver) return;
     setPhaseText('BP', "BATTLE PHASE");
     currentPhase = 'BP';
     updateContinuousEffects();
@@ -182,7 +190,7 @@ function oppBattlePhase() {
 
         // Recursive function to handle sequential attacks
         const executeAttackSequence = (index) => {
-            if (index >= myAttackers.length || gameState.gameOver) {
+            if (index >= myAttackers.length || gameState.turnInfo.gameOver) {
                 // Done with all attacks
                 setTimeout(() => {
                     ChainManager.checkPhaseResponse('player', oppMainPhase2);
@@ -271,7 +279,7 @@ function oppBattlePhase() {
 }
 
 function oppMainPhase2() {
-    if (gameState.gameOver) return;
+    if (gameState.turnInfo.gameOver) return;
     setPhaseText('MP2', "MAIN PHASE 2");
     currentPhase = 'MP2';
     updateContinuousEffects();
@@ -285,7 +293,7 @@ function oppMainPhase2() {
 }
 
 function oppEndPhase() {
-    if (gameState.gameOver) return;
+    if (gameState.turnInfo.gameOver) return;
     setPhaseText('EP', "END PHASE");
     currentPhase = 'EP'; // Important: Update phase var
     log("Opponent End Phase");

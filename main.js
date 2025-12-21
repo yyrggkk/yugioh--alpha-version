@@ -2,19 +2,148 @@
 // =========================================
 // 1. GAME STATE & UTILS
 // =========================================
-let gameState = {
+
+// Phase 1: gameState is now initialized in index.php from state.js
+// This legacy object is kept for compatibility during transition
+// TODO Phase 2: Remove this and use only the centralized gameState
+let legacyGameState = {
     normalSummonUsed: false,
     specialSummonsCount: 0,
     playerLP: 8000,
     oppLP: 8000,
     gameOver: false,
-    pendingOpponentAction: null // Store callback for resuming opponent turn
+    pendingOpponentAction: null,
+    aiMainPhaseState: { hasSummoned: false, backrowSetCount: 0 }
 };
 
+// =========================================
+// STATE SYNCHRONIZATION LAYER (Phase 1)
+// =========================================
+
+/**
+ * Sync GameState -> Legacy Globals
+ * Call this after updating gameState
+ */
+function syncStateToGlobals() {
+    playerDeckData = gameState.players.player.deck;
+    oppDeckData = gameState.players.opponent.deck;
+    playerHandData = gameState.players.player.hand;
+    oppHandData = gameState.players.opponent.hand;
+    playerGYData = gameState.players.player.gy;
+    oppGYData = gameState.players.opponent.gy;
+
+    // Sync legacy gameState properties
+    legacyGameState.normalSummonUsed = gameState.turnInfo.normalSummonUsed;
+    legacyGameState.gameOver = gameState.turnInfo.gameOver;
+    legacyGameState.playerLP = gameState.players.player.lp;
+    legacyGameState.oppLP = gameState.players.opponent.lp;
+}
+
+/**
+ * Sync Legacy Globals -> GameState
+ * Call this after updating legacy globals
+ */
+function syncGlobalsToState() {
+    gameState.players.player.deck = playerDeckData;
+    gameState.players.opponent.deck = oppDeckData;
+    gameState.players.player.hand = playerHandData;
+    gameState.players.opponent.hand = oppHandData;
+    gameState.players.player.gy = playerGYData;
+    gameState.players.opponent.gy = oppGYData;
+
+    gameState.turnInfo.normalSummonUsed = legacyGameState.normalSummonUsed;
+    gameState.turnInfo.gameOver = legacyGameState.gameOver;
+    gameState.players.player.lp = legacyGameState.playerLP;
+    gameState.players.opponent.lp = legacyGameState.oppLP;
+}
+
+// UI State (not part of game logic)
 let selectedFieldCard = null;
+
+/**
+ * Synchronize DOM state to GameState
+ * Critical for AI to see the actual board
+ */
+function syncDOMToGameState() {
+    // 1. Sync Players
+    ['player', 'opponent'].forEach(pid => {
+        const player = gameState.players[pid];
+
+        // Sync LP (Already synced via updateLP, but good for safety)
+        const lpVal = (pid === 'player') ?
+            document.getElementById('player-lp-val').textContent :
+            document.getElementById('opp-lp-val').textContent;
+        player.lp = parseInt(lpVal);
+
+        // Sync Hand (Object references from globals)
+        // Note: Global arrays are the source of truth for Hand/Deck/GY content
+        player.hand = (pid === 'player') ? playerHandData : oppHandData;
+        player.deck = (pid === 'player') ? playerDeckData : oppDeckData;
+        player.gy = (pid === 'player') ? playerGYData : oppGYData;
+
+        // Sync Field
+        // Monsters
+        let monsterZones = [];
+        if (pid === 'player') {
+            monsterZones = [document.getElementById('p-m1'), document.getElementById('p-m2'), document.getElementById('p-m3')];
+        } else {
+            monsterZones = Array.from(document.querySelectorAll('.opp-zone.monster-zone'));
+        }
+
+        player.field.monsters = monsterZones.map((zone, index) => {
+            if (!zone) return null;
+            const cardEl = zone.querySelector('.card');
+
+            if (!cardEl) return null;
+
+            return {
+                name: cardEl.getAttribute('data-name'),
+                atk: parseInt(cardEl.getAttribute('data-atk')),
+                def: parseInt(cardEl.getAttribute('data-def')),
+                level: parseInt(cardEl.getAttribute('data-level') || 0),
+                attribute: cardEl.getAttribute('data-attribute'),
+                race: cardEl.getAttribute('data-race'),
+                type: cardEl.getAttribute('data-type'), // e.g. "Dragon/Effect"
+                position: cardEl.classList.contains('pos-atk') ? 'atk' : 'def',
+                faceUp: !cardEl.classList.contains('face-down'),
+                attacked: cardEl.getAttribute('data-attacked') === 'true',
+                uid: cardEl.getAttribute('data-uid'),
+                category: 'monster'
+            };
+        });
+
+        // Spells/Traps
+        let spellZones = [];
+        if (pid === 'player') {
+            spellZones = [document.getElementById('p-s1'), document.getElementById('p-s2'), document.getElementById('p-s3')];
+        } else {
+            spellZones = Array.from(document.querySelectorAll('.opp-zone.spell-trap-zone'));
+        }
+
+        player.field.spells = spellZones.map((zone, index) => {
+            if (!zone) return null;
+            const cardEl = zone.querySelector('.card');
+
+            if (!cardEl) return null;
+
+            return {
+                name: cardEl.getAttribute('data-name'),
+                type: cardEl.getAttribute('data-type'),
+                faceUp: !cardEl.classList.contains('face-down'),
+                setTurn: parseInt(cardEl.getAttribute('data-set-turn') || -1),
+                uid: cardEl.getAttribute('data-uid'),
+                category: cardEl.getAttribute('data-card-category') || 'spell'
+            };
+        });
+    });
+
+    // Sync Turn Info
+    gameState.turnInfo.phase = currentPhase;
+    // activePlayer and turnCount are managed in switchTurn but good to ensure
+    gameState.turnInfo.activePlayer = isPlayerTurn ? 'player' : 'opponent';
+}
 let selectedHandCard = null;
-let selectedChainCard = null; // Track selection in UI
-// let chainStack = []; // Removed
+let selectedChainCard = null;
 
 let battleState = { isAttacking: false, attackerCard: null };
 
@@ -167,7 +296,7 @@ function sendToGraveyard(cardEl, owner) {
     if (finalDest === 'player' && (gyTriggerName === 'Axe of Despair' || gyTriggerName === 'Malevolent Nuzzler')) {
         setTimeout(() => {
             // Check LP Cost availability
-            if (gyTriggerName === 'Malevolent Nuzzler' && gameState.playerLP <= 500) {
+            if (gyTriggerName === 'Malevolent Nuzzler' && gameState.players.player.lp <= 500) {
                 log("Malevolent Nuzzler sent to GY. Insufficient LP to pay cost.");
                 return;
             }
@@ -1111,23 +1240,23 @@ function updateCounters() {
 }
 
 function updateLP(damage, target) {
-    if (target === 'player') gameState.playerLP -= damage;
-    else gameState.oppLP -= damage;
-    if (gameState.playerLP < 0) gameState.playerLP = 0;
-    if (gameState.oppLP < 0) gameState.oppLP = 0;
-    document.getElementById('player-lp-val').textContent = gameState.playerLP;
-    document.getElementById('opp-lp-val').textContent = gameState.oppLP;
+    if (target === 'player') gameState.players.player.lp -= damage;
+    else gameState.players.opponent.lp -= damage;
+    if (gameState.players.player.lp < 0) gameState.players.player.lp = 0;
+    if (gameState.players.opponent.lp < 0) gameState.players.opponent.lp = 0;
+    document.getElementById('player-lp-val').textContent = gameState.players.player.lp;
+    document.getElementById('opp-lp-val').textContent = gameState.players.opponent.lp;
     checkWinCondition();
 }
 
 function checkWinCondition() {
-    if (gameState.gameOver) return;
-    if (gameState.playerLP <= 0) endDuel("You Lost! LP reached 0.");
-    else if (gameState.oppLP <= 0) endDuel("You Won! Opponent LP reached 0.");
+    if (gameState.turnInfo.gameOver) return;
+    if (gameState.players.player.lp <= 0) endDuel("You Lost! LP reached 0.");
+    else if (gameState.players.opponent.lp <= 0) endDuel("You Won! Opponent LP reached 0.");
 }
 
 function endDuel(msg) {
-    gameState.gameOver = true; alert(msg); log(`GAME OVER: ${msg}`); document.body.style.pointerEvents = 'none';
+    gameState.turnInfo.gameOver = true; alert(msg); log(`GAME OVER: ${msg}`); document.body.style.pointerEvents = 'none';
 }
 
 // =========================================
@@ -1272,7 +1401,7 @@ function startDuelSequence() {
 }
 
 function runNormalTurn() {
-    if (gameState.gameOver) return;
+    if (gameState.turnInfo.gameOver) return;
     log(`Turn ${turnCount}: Draw Phase`);
     setPhaseText('DP', "DRAW PHASE");
     if (playerDeckData.length === 0) { endDuel("You Lost! Deck is empty."); return; }
@@ -1403,7 +1532,7 @@ function validateActivation(card, isChainLink1 = true) {
 }
 
 function switchTurn() {
-    if (gameState.gameOver) return;
+    if (gameState.turnInfo.gameOver) return;
 
     // Clear Turn Buffs
     if (activeTurnBuffs.length > 0) {
@@ -1418,8 +1547,15 @@ function switchTurn() {
     isPlayerTurn = !isPlayerTurn;
     turnCount++; // FIX: Increment turn count on EVERY switch (T1, T2, T3...)
 
+    // Update State
+    gameState.turnInfo.activePlayer = isPlayerTurn ? 'player' : 'opponent';
+    gameState.turnInfo.turnCount = turnCount;
+
+    // Sync DOM to State to ensure AI sees the new turn state
+    syncDOMToGameState();
+
     document.getElementById('actionMenu').classList.remove('active');
-    gameState.normalSummonUsed = false;
+    gameState.turnInfo.normalSummonUsed = false;
     document.querySelectorAll('.card').forEach(c => c.setAttribute('data-attacked', 'false'));
     cancelBattleMode();
     spellState.isTargeting = false; clearHighlights();
@@ -1509,7 +1645,7 @@ function setPhaseText(short, long) { currentPhase = short; phaseBtn.textContent 
 
 // --- DRAW LOGIC ---
 function drawCard() {
-    if (gameState.gameOver) return;
+    if (gameState.turnInfo.gameOver) return;
     if (playerDeckData.length > 0) {
         const card = playerDeckData.pop(); playerHandData.push(card); updateCounters();
         const rect = document.getElementById('playerDeck').getBoundingClientRect();

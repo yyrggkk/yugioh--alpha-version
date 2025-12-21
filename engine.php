@@ -253,31 +253,31 @@ function buildFullDeck($db) {
 }
 // // Build Decks with 20 cards now
 $playerDeck = buildRandomDeck($cardDB, 20);
-// $oppDeck=[
-//     $cardDB['geminielf'],
-//     $cardDB['raigeki'],
-//     $cardDB['dianketo'],
-//     $cardDB['mst'],
-//     $cardDB['mst'],
-//     $cardDB['bannerofcourage'],
-//     $cardDB['burningland'],
-//     $cardDB['axeofdespair'],
-//     $cardDB['malevolentnuzzler'],
-//     $cardDB['rushrecklessly'],
-//     $cardDB['geminielf'],
-//     $cardDB['malevolentnuzzler'],
-//     $cardDB['mst'],
-//     $cardDB['ookazi'],
-//     $cardDB['pot'],
-//     $cardDB['reinforcements'],
-//     $cardDB['mst'],
-//     $cardDB['geminielf'],
-//     $cardDB['geminielf'],
-//     $cardDB['geminielf'],
-//     $cardDB['geminielf'],
-//     $cardDB['geminielf'],
-// ];
-$oppDeck    = buildRandomDeck($cardDB, 20);
+$oppDeck=[
+    $cardDB['geminielf'],
+    $cardDB['raigeki'],
+    $cardDB['dianketo'],
+    $cardDB['mst'],
+    $cardDB['mst'],
+    $cardDB['bannerofcourage'],
+    $cardDB['burningland'],
+    $cardDB['axeofdespair'],
+    $cardDB['malevolentnuzzler'],
+    $cardDB['rushrecklessly'],
+    $cardDB['geminielf'],
+    $cardDB['malevolentnuzzler'],
+    $cardDB['mst'],
+    $cardDB['ookazi'],
+    $cardDB['reinforcements'],
+    $cardDB['mst'],
+    $cardDB['geminielf'],
+    $cardDB['geminielf'],
+    $cardDB['geminielf'],
+    $cardDB['geminielf'],
+    $cardDB['geminielf'],
+    $cardDB['pot'],
+];
+// $oppDeck    = buildRandomDeck($cardDB, 20);
 
 // Initial Field State
 $playerMonsters = [0 => null, 1 => null, 2 => null];
@@ -297,6 +297,53 @@ $oppExDeck = [];
 
 $playerHand = [];
 $oppHand = [];
+
+// =========================================
+// GAME STATE INITIALIZATION (Phase 1)
+// =========================================
+// Create initial state structure for GameState class
+$initialState = [
+    'players' => [
+        'player' => [
+            'id' => 'player',
+            'lp' => 8000,
+            'hand' => $playerHand,
+            'deck' => $playerDeck,
+            'gy' => $playerGY,
+            'extra' => $playerExDeck,
+            'field' => [
+                'monsters' => $playerMonsters,
+                'spells' => $playerSpells,
+                'field' => null
+            ]
+        ],
+        'opponent' => [
+            'id' => 'opponent',
+            'lp' => 8000,
+            'hand' => $oppHand,
+            'deck' => $oppDeck,
+            'gy' => $oppGY,
+            'extra' => $oppExDeck,
+            'field' => [
+                'monsters' => $oppMonsters,
+                'spells' => $oppSpells,
+                'field' => null
+            ]
+        ]
+    ],
+    'turnInfo' => [
+        'phase' => 'DP',
+        'activePlayer' => 'player',
+        'turnCount' => 1,
+        'normalSummonUsed' => false,
+        'gameOver' => false
+    ],
+    'chain' => [],
+    'aiMainPhaseState' => [
+        'hasSummoned' => false,
+        'backrowSetCount' => 0
+    ]
+];
 
 // ==========================================
 // 3. RENDER FUNCTION

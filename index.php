@@ -501,7 +501,22 @@
     </div>
 
     <div class="hand-container" id="playerHand"></div>
+    
+    <!-- Phase 1: State Centralization -->
+    <script src="state.js"></script>
     <script>
+        // =========================================
+        // INITIALIZE GAME STATE (Phase 1)
+        // =========================================
+        // Create GameState instance
+        const gameState = new GameState();
+        
+        // Load initial state from PHP
+        const initialState = <?php echo json_encode($initialState); ?>;
+        gameState.fromJSON(initialState);
+        
+        // Legacy globals for compatibility (will be removed in Phase 2)
+        // These are kept in sync with gameState via sync functions
         let playerDeckData = <?php echo json_encode($playerDeck); ?>;
         let playerHandData = []; 
         let playerGYData = <?php echo json_encode($playerGY); ?>;
@@ -510,7 +525,28 @@
         let oppHandData = [];
         let oppGYData = <?php echo json_encode($oppGY); ?>;
         let oppExData = [];
+        
+        // Sync legacy globals to GameState on load
+        gameState.players.player.deck = playerDeckData;
+        gameState.players.player.hand = playerHandData;
+        gameState.players.player.gy = playerGYData;
+        gameState.players.player.extra = playerExData;
+        gameState.players.opponent.deck = oppDeckData;
+        gameState.players.opponent.hand = oppHandData;
+        gameState.players.opponent.gy = oppGYData;
+        gameState.players.opponent.extra = oppExData;
+        
+        console.log('[State] GameState initialized:', gameState);
     </script>
+    
+    <!-- Phase 2: Engine and Renderer Layers -->
+    <script src="engine.js"></script>
+    
+    <!-- Phase 3: AI Simulation Brain -->
+    <script src="simulation.js"></script>
+    
+    <script src="renderer.js"></script>
+    
     <script src="main.js"></script>
     <script src="ai.js"></script>
 </body>
