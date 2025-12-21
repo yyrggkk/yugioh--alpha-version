@@ -131,6 +131,72 @@ function executeSimulatedMove(move) {
             setTimeout(() => oppMainPhaseStep(), 800);
             break;
 
+        case 'ACTIVATE_SPELL':
+            log(`[AI] Activates Spell: ${move.card.name}`);
+            // Use Direct Hand Activation logic to ensure it works
+            executeAIHandActivation(move.card);
+
+            // Continue thinking (longer delay for resolution)
+            setTimeout(() => oppMainPhaseStep(), 1500);
+            break;
+
+        case 'TRIBUTE_SUMMON':
+            log(`[AI] Tribute Summoning ${move.card.name}!`);
+            const tributes = move.tributes || [];
+
+            // Process Tributes
+            // We need to find the actual DOM elements for the zone indices
+            const oppMonsters = document.querySelectorAll('.opp-zone.monster-zone');
+            tributes.forEach(idx => {
+                const zone = oppMonsters[idx];
+                if (zone && zone.children.length > 0) {
+                    const cardEl = zone.children[0];
+                    sendToGraveyard(cardEl, 'opponent');
+                }
+            });
+
+            // Execute Summon
+            executeOpponentPlay(move.card, 'summon');
+            gameState.aiMainPhaseState.hasSummoned = true;
+
+            setTimeout(() => oppMainPhaseStep(), 1500);
+            break;
+
+        case 'CHANGE_POSITION':
+            log(`[AI] Changing position of monster at zone ${move.zoneIndex}`);
+            const monZone = document.querySelectorAll('.opp-zone.monster-zone')[move.zoneIndex];
+            if (monZone && monZone.children.length > 0) {
+                const cardEl = monZone.children[0];
+                // Use main.js changePosition function if global, or simulate click
+                if (typeof changePosition === 'function') {
+                    // Since changePosition usually toggles based on current state, correct.
+                    // But changePosition might check for turn/phase for PLAYER.
+                    // We might need a force flag or separate AI function.
+                    // Let's implement AI specific toggle to be safe.
+
+                    const currentPos = cardEl.classList.contains('pos-atk') ? 'atk' : 'def';
+                    const newPos = currentPos === 'atk' ? 'def' : 'atk';
+
+                    cardEl.classList.remove('pos-atk', 'pos-def', 'face-down'); // Face-down? If flipping up.
+                    // AI logic usually flips up if changing pos?
+                    // If it was Set (face-down def), changing to Attack flips it face-up.
+                    // If it was Atk, changing to Def keeps it face-up usually (unless book of moon).
+
+                    if (newPos === 'atk') {
+                        cardEl.classList.add('face-up', 'pos-atk');
+                        // ensure image is shown
+                        const img = cardEl.getAttribute('data-img');
+                        cardEl.style.backgroundImage = `url('${img}')`;
+                    } else {
+                        cardEl.classList.add('pos-def'); // Keep face-up if was face-up?
+                        // If we are changing FROM Atk, we stay face-up.
+                        if (!cardEl.classList.contains('face-down')) cardEl.classList.add('face-up');
+                    }
+                }
+            }
+            setTimeout(() => oppMainPhaseStep(), 800);
+            break;
+
         case 'PASS_PHASE':
             // AI decided best move is to pass to next phase
             log(`[AI] Passing to next phase.`);
@@ -350,7 +416,8 @@ function executeOpponentPlay(cardData, action) {
     if (cardData.category === 'monster') {
         cssClass = (action === 'summon' || action === 'special-summon') ? 'face-up pos-atk' : 'face-down pos-def';
     } else {
-        cssClass = 'face-down pos-atk'; // AI mostly Sets
+        // Fix: If activating, it must be face-up
+        cssClass = (action === 'activate') ? 'face-up pos-atk' : 'face-down pos-atk';
     }
 
     const newCard = document.createElement('div');
@@ -381,6 +448,13 @@ function executeOpponentPlay(cardData, action) {
 
     if (action === 'set') newCard.setAttribute('data-set-turn', turnCount);
 
+    // FIX: Set global flag when AI summons
+    if (action === 'summon' || action === 'set') {
+        if (cardData.category === 'monster') {
+            gameState.turnInfo.normalSummonUsed = true;
+        }
+    }
+
     if (cssClass.includes('face-up')) {
         newCard.style.backgroundImage = `url('${cardData.img}')`;
         if (cardData.category === 'monster') {
@@ -395,12 +469,57 @@ function executeOpponentPlay(cardData, action) {
     log(`Opponent ${action}s a card.`);
 
     if (action === 'activate') {
-        // Trigger effect immediately (as Chain Link 1)
-        // We use a small delay to allow DOM to update
-        setTimeout(() => {
-            activateSetCard(newCard, true);
-        }, 500);
+        // Trigger effect immediately (as    if (action === 'activate') {
+        // 1. Trigger Activation Visuals/Logic
+        // Ensure we call activation logic (which calls cardEffects)
+        // We need to pass 'true' to activateSetCard to treat it as Chain Link 1 if started here
+        // But executeOpponentPlay is Main Phase action, so yes CL1.
+        setTimeout(() => { activateSetCard(newCard, true); }, 500);
     }
+}
+
+/**
+ * Direct Hand Activation for AI
+ * Bypasses generic "Set" logic mostly to ensure correct state.
+ */
+function executeAIHandActivation(cardData) {
+    const zones = document.querySelectorAll('.opp-zone.spell-trap-zone');
+    let targetZone = null;
+    for (let z of zones) { if (z.children.length === 0) { targetZone = z; break; } }
+
+    if (!targetZone) { log("[AI] Spells Full!"); return; }
+
+    const newCard = document.createElement('div');
+    newCard.className = 'card face-up pos-atk'; // Create FACE UP directly
+    newCard.setAttribute('data-turn', turnCount);
+    newCard.setAttribute('data-uid', generateUID());
+    newCard.setAttribute('data-owner', 'opponent'); // Critical
+
+    // Copy Attributes
+    newCard.setAttribute('data-name', cardData.name);
+    newCard.setAttribute('data-type', cardData.humanReadableCardType || cardData.type);
+    newCard.setAttribute('data-img', cardData.img);
+    newCard.setAttribute('data-card-category', 'spell');
+    newCard.setAttribute('data-race', cardData.race || '');
+    newCard.setAttribute('data-sub-type', cardData.subType || '');
+
+    newCard.style.backgroundImage = `url('${cardData.img}')`;
+
+    targetZone.appendChild(newCard);
+
+    // Remove from Hand Logic (Simulated by finding Card in Hand Array/State?)
+    // executeOpponentPlay usually handles "Remove from Hand Element" if passed an element.
+    // Here we passed 'cardData' which object.
+    // We must ensure the hand visual is updated.
+    // Since AI hand is hidden, any card removal visualizes "playing a card".
+    const handContainer = document.querySelector('.opponent-hand-container');
+    if (handContainer && handContainer.children.length > 0) {
+        handContainer.children[0].remove();
+    }
+
+    // Activate Immediately
+    // No timeout, just go.
+    activateSetCard(newCard, true); // force=true
 }
 
 // --- AI DECISION LOGIC ---
@@ -446,8 +565,16 @@ function aiShouldActivate(cardOrData) {
 
     // Stat Modifiers / Battle
     if (['Rush Recklessly', 'Reinforcements', 'Castle Walls'].includes(name)) {
-        // Only if in Battle Phase?
-        if (currentPhase !== 'BP') return false;
+        // Allow in MP1 (Pre-Battle Buff) OR BP (During Attack)
+        // Disallow MP2 and EP
+        if (currentPhase === 'MP2' || currentPhase === 'EP' || currentPhase === 'DP' || currentPhase === 'SP') return false;
+
+        if (currentPhase === 'BP' && !battleState.isAttacking) return false;
+
+        // FIX: Must have a monster to target!
+        // We assume AI only targets its own monsters for buffs (simplified)
+        const aiMonsters = document.querySelectorAll('.opp-zone.monster-zone .card').length;
+        if (aiMonsters === 0) return false;
     }
 
     // Mirror Force / Sakuretsu - handled by condition implicitly mostly, but explicit check:
@@ -469,8 +596,64 @@ function aiSelectBestResponse(candidates) {
 
     if (validCandidates.length === 0) return null;
 
+    // Advanced Filtering ("Perfect Timing")
+    const timedCandidates = validCandidates.filter(c => {
+        const name = c.name;
+
+        // 1. Battle Tricks (Reinforcements, Rush Recklessly)
+        if (['Reinforcements', 'Rush Recklessly', 'Castle Walls'].includes(name)) {
+            if (currentPhase === 'BP' && battleState.isAttacking) {
+                // Check if we are winning or losing
+                // Simplified: Assuming we know who is fighting
+                // If AI is defender and ATK < Attacker ATK -> Activate
+                // If AI is attacker and ATK < Defender ATK -> Activate
+                // Implementation requires access to current battle stats (battleState.attacker, battleState.target)
+                // If battleState vars are global:
+                if (battleState.attacker && battleState.target) {
+                    const aiCard = (getController(battleState.attacker) === 'opponent') ? battleState.attacker : battleState.target;
+                    const playerCard = (aiCard === battleState.attacker) ? battleState.target : battleState.attacker;
+
+                    if (aiCard && playerCard) {
+                        const aiAtk = parseInt(aiCard.getAttribute('data-atk')) || 0;
+                        const pAtk = parseInt(playerCard.getAttribute('data-atk')) || 0; // Or DEF?
+                        // Simplified ATK vs ATK
+
+                        // If AI winning heavily, don't waste
+                        if (aiAtk >= pAtk + 500) return false;
+
+                        // If AI losing slightly, activate
+                        if (aiAtk < pAtk) return true;
+
+                        // If AI winning slightly, maybe save? But usually secure the win.
+                        return true;
+                    }
+                }
+            }
+        }
+
+        // 2. Removal (Raigeki, Trap Hole) - Assuming chain response to Summon?
+        // Trap Hole is Speed 2? No, normal trap. 
+        // If responding to summon:
+        if (name === 'Trap Hole') {
+            // Check last summoned monster stats
+            // We can check the "last chain link" or assume the system prompts us appropriately.
+            // Heuristic: If opponent has Strong Monster (>1500), activate.
+            const oppMons = document.querySelectorAll('.player-zone.monster-zone .card');
+            let hasThreat = false;
+            oppMons.forEach(m => {
+                const atk = parseInt(m.getAttribute('data-atk')) || 0;
+                if (atk >= 1500) hasThreat = true;
+            });
+            return hasThreat;
+        }
+
+        return true;
+    });
+
+    if (timedCandidates.length === 0) return null;
+
     // Sort by priority (Simple heuristic)
-    validCandidates.sort((a, b) => {
+    timedCandidates.sort((a, b) => {
         const getScore = (cand) => {
             const name = cand.name;
             if (name === 'Magic Jammer' || name === 'Seven Tools of the Bandit') return 10;
@@ -483,10 +666,101 @@ function aiSelectBestResponse(candidates) {
         return getScore(b) - getScore(a);
     });
 
-    return validCandidates[0];
+    return timedCandidates[0];
 }
 
 function aiCheckChain(candidates) {
-    // Use the same selection logic as Phase Response
     return aiSelectBestResponse(candidates);
+}
+
+// =========================================
+// AI TARGETING LOGIC
+// =========================================
+
+/**
+ * Handle AI selection for targeting effects (Equip Spells, Traps, etc.)
+ * Called when ChainManager pauses for AI selection.
+ */
+function aiResolveTarget() {
+    const resolvingCard = document.querySelector('.card.resolving');
+    if (!resolvingCard) {
+        // Fallback?
+        ChainManager.isPaused = false;
+        ChainManager.resolve();
+        return;
+    }
+
+    const cardName = resolvingCard.getAttribute('data-name');
+    const type = resolvingCard.getAttribute('data-type') || "";
+    const race = resolvingCard.getAttribute('data-race') || "";
+
+    // Determine Target Type
+    let targetType = 'monster';
+    if (type.includes('Spell') || type.includes('Trap')) {
+        // Logic depends on card. simplified:
+        if (cardName === 'Mystical Space Typhoon') targetType = 'spell';
+    }
+
+    // Find Candidates
+    let candidates = [];
+    if (targetType === 'monster') {
+        const zoneSelector = (cardName === 'Monster Reborn') ? '.monster-zone' : '.monster-zone';
+        // For Equips/Buffs -> Prefer Own Monsters
+        // For Destruction -> Prefer Opponent Monsters
+
+        const isBuff = ['Axe of Despair', 'Malevolent Nuzzler', 'Rush Recklessly', 'Reinforcements'].includes(cardName) || type.includes('Equip') || race === 'Equip';
+        const isDestruction = ['Fissure', 'Smashing Ground', 'Trap Hole', 'Ring of Destruction'].includes(cardName);
+
+        if (isBuff) {
+            candidates = Array.from(document.querySelectorAll('.opp-zone.monster-zone .card')); // AI uses Opp-Zone (itself)
+        } else if (isDestruction) {
+            candidates = Array.from(document.querySelectorAll('.player-zone.monster-zone .card')); // AI targets Player
+        } else {
+            // General/Fallback
+            candidates = Array.from(document.querySelectorAll('.monster-zone .card'));
+        }
+    } else {
+        // Spell destruction -> Player backrow
+        candidates = Array.from(document.querySelectorAll('.player-zone.spell-trap-zone .card'));
+    }
+
+    // fallback if specific targeting failed (e.g. no targets)
+    if (candidates.length === 0) {
+        log(`[AI] No targets for ${cardName}. Effect fizzles.`);
+        ChainManager.continueResolution();
+        return;
+    }
+
+    // Selection Strategy: Best/Worst
+    // Buff: Buff strongest to make it stronger? Or Buff weak? 
+    // Logic: Buff Strongest usually.
+    // Destruction: Destroy Strongest.
+
+    let bestTarget = candidates[0];
+    let bestStat = -1;
+
+    candidates.forEach(c => {
+        const atk = parseInt(c.getAttribute('data-atk'));
+        if (atk > bestStat) {
+            bestStat = atk;
+            bestTarget = c;
+        }
+    });
+
+    log(`[AI] Targets ${bestTarget.getAttribute('data-name')} with ${cardName}.`);
+
+    // EXECUTE TARGET LOGIC
+    // We reuse executeSpellTargetLogic to ensure consistency
+
+    spellState.isTargeting = true;
+    spellState.sourceCard = resolvingCard;
+
+    // Call existing logic
+    executeSpellTargetLogic(bestTarget);
+
+    // Resume Chain if not done by helper
+    // executeSpellTargetLogic usually just sets attrs.
+    if (ChainManager.isPaused) {
+        ChainManager.continueResolution();
+    }
 }

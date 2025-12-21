@@ -537,6 +537,16 @@ const ChainManager = {
         if (result === false) {
             log("Chain Link paused for selection...");
             this.isPaused = true;
+
+            // CHECK IF AI needs to select
+            const controller = getController(card);
+            console.log(`[ChainManager] Paused. Controller: ${controller}. Calling aiResolveTarget? ${controller === 'opponent'}`);
+            if (controller === 'opponent') {
+                setTimeout(() => {
+                    log("[ChainManager] Triggering AI Target Resolution...");
+                    aiResolveTarget();
+                }, 800);
+            }
             return;
         }
 
@@ -848,6 +858,7 @@ function reviveMonster(targetData, newController) {
     return newCard;
 }
 
+// --- HELPER: EFFECT FACTORY ---
 const cardEffects = {
     'Pot of Greed': EffectFactory.draw(2),
     'Graceful Charity': EffectFactory.draw(3),
@@ -1776,7 +1787,7 @@ function performAction(action) {
     }
 
     const isMonsterSummon = (action === 'summon') || (action === 'set' && selectedHandCard.getAttribute('data-card-category') === 'monster');
-    if (isMonsterSummon && gameState.normalSummonUsed) { alert("Already used Normal Summon/Set this turn!"); actionMenu.classList.remove('active'); return; }
+    if (isMonsterSummon && gameState.turnInfo.normalSummonUsed) { alert("Already used Normal Summon/Set this turn!"); actionMenu.classList.remove('active'); return; }
 
     if (isMonsterSummon) {
         const level = parseInt(selectedHandCard.getAttribute('data-level'));
@@ -1819,7 +1830,7 @@ function executeCardPlay(handCardEl, action) {
         for (let id of zones) { if (document.getElementById(id).children.length === 0) { targetZone = document.getElementById(id); break; } }
         if (!targetZone) { alert("Monster Zones Full!"); return; }
         cssClass = (action === 'summon' || action === 'special-summon') ? 'face-up pos-atk' : 'face-down pos-def';
-        if (action === 'summon' || action === 'set') gameState.normalSummonUsed = true;
+        if (action === 'summon' || action === 'set') gameState.turnInfo.normalSummonUsed = true;
     } else {
         const zones = ['p-s1', 'p-s2', 'p-s3'];
         for (let id of zones) { if (document.getElementById(id).children.length === 0) { targetZone = document.getElementById(id); break; } }
@@ -2018,14 +2029,14 @@ document.body.addEventListener('click', function (e) {
                     if (summonLogic === 'built-in') {
                         if (canActInMain) {
                             menuHtml = `<button class="action-btn" onclick="performAction('special-summon')">Special Summon</button>`;
-                            if (!gameState.normalSummonUsed) {
+                            if (!gameState.turnInfo.normalSummonUsed) {
                                 menuHtml += `<button class="action-btn" onclick="performAction('summon')">Normal Summon</button>`;
                             }
                             menuHtml += `<button class="action-btn" onclick="performAction('set')">Set</button>`;
                         }
                     } else {
                         // Standard Normal Summon/Set
-                        if (!gameState.normalSummonUsed && canActInMain) {
+                        if (!gameState.turnInfo.normalSummonUsed && canActInMain) {
                             menuHtml = `<button class="action-btn" onclick="performAction('summon')">Normal Summon</button>
                                         <button class="action-btn" onclick="performAction('set')">Set</button>`;
                         }

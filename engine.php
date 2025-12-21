@@ -253,31 +253,33 @@ function buildFullDeck($db) {
 }
 // // Build Decks with 20 cards now
 $playerDeck = buildRandomDeck($cardDB, 20);
-$oppDeck=[
-    $cardDB['geminielf'],
-    $cardDB['raigeki'],
-    $cardDB['dianketo'],
-    $cardDB['mst'],
-    $cardDB['mst'],
-    $cardDB['bannerofcourage'],
-    $cardDB['burningland'],
-    $cardDB['axeofdespair'],
-    $cardDB['malevolentnuzzler'],
-    $cardDB['rushrecklessly'],
-    $cardDB['geminielf'],
-    $cardDB['malevolentnuzzler'],
-    $cardDB['mst'],
-    $cardDB['ookazi'],
-    $cardDB['reinforcements'],
-    $cardDB['mst'],
-    $cardDB['geminielf'],
-    $cardDB['geminielf'],
-    $cardDB['geminielf'],
-    $cardDB['geminielf'],
-    $cardDB['geminielf'],
-    $cardDB['pot'],
-];
-// $oppDeck    = buildRandomDeck($cardDB, 20);
+// $oppDeck=[
+//     $cardDB['geminielf'],
+//     $cardDB['raigeki'],
+//     $cardDB['dianketo'],
+//     $cardDB['mst'],
+//     $cardDB['mst'],
+//     $cardDB['bannerofcourage'],
+//     $cardDB['burningland'],
+//     $cardDB['malevolentnuzzler'],
+//     $cardDB['rushrecklessly'],
+//     $cardDB['geminielf'],
+//     $cardDB['malevolentnuzzler'],
+//     $cardDB['mst'],
+//     $cardDB['ookazi'],
+//     $cardDB['reinforcements'],
+//     $cardDB['mst'],
+//     $cardDB['geminielf'],
+//     $cardDB['geminielf'],
+//     $cardDB['geminielf'],
+//     $cardDB['geminielf'],
+//     $cardDB['axeofdespair'],
+//     $cardDB['axeofdespair'],
+//     $cardDB['axeofdespair'],
+//     $cardDB['axeofdespair'],
+//     $cardDB['geminielf'],
+// ];
+$oppDeck    = buildRandomDeck($cardDB, 20);
 
 // Initial Field State
 $playerMonsters = [0 => null, 1 => null, 2 => null];

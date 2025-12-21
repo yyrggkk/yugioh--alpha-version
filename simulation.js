@@ -109,35 +109,62 @@ function Sim_getAllMoves(state, playerId) {
 
                 const level = card.level || 0;
 
-                // Level 1-4: No tribute
+                // Normal/Set (Level 1-4)
                 if (level <= 4) {
                     player.field.monsters.forEach((slot, zoneIdx) => {
                         if (slot === null) {
-                            // Summon in ATK
+                            moves.push({ type: 'NORMAL_SUMMON', playerId, handIndex: handIdx, zoneIndex: zoneIdx, position: 'atk', faceUp: true, card: card });
+                            moves.push({ type: 'SET_MONSTER', playerId, handIndex: handIdx, zoneIndex: zoneIdx, position: 'def', faceUp: false, card: card });
+                        }
+                    });
+                }
+                // Tribute Summon (Level 5+)
+                else {
+                    const tributesNeeded = level >= 7 ? 2 : 1;
+                    const monsterIndices = player.field.monsters.map((m, i) => m ? i : -1).filter(i => i !== -1);
+
+                    if (monsterIndices.length >= tributesNeeded) {
+                        // Generate combinations of tributes
+                        const tributeCombos = getCombinations(monsterIndices, tributesNeeded);
+
+                        tributeCombos.forEach(tributes => {
+                            // Find empty slot (or slot occupied by tribute?)
+                            // Rules: Can summon into slot of tribute.
+                            // Simplified: Just pick first available or first tribute slot.
+                            const zoneIdx = tributes[0];
+
                             moves.push({
-                                type: 'NORMAL_SUMMON',
+                                type: 'TRIBUTE_SUMMON',
                                 playerId,
                                 handIndex: handIdx,
-                                zoneIndex: zoneIdx,
+                                zoneIndex: zoneIdx, // Overwrite
+                                tributes: tributes,
                                 position: 'atk',
                                 faceUp: true,
                                 card: card
                             });
-                            // Set in DEF
-                            moves.push({
-                                type: 'SET_MONSTER',
-                                playerId,
-                                handIndex: handIdx,
-                                zoneIndex: zoneIdx,
-                                position: 'def',
-                                faceUp: false,
-                                card: card
-                            });
-                        }
-                    });
+                        });
+                    }
                 }
             });
         }
+
+        // Position Changes (MP1/MP2)
+        player.field.monsters.forEach((m, idx) => {
+            // Check if monster exists and hasn't attacked/summoned
+            if (m && !m.attacked) {
+                // Rule: Cannot change position if summoned/set this turn
+                if (m.turnPlayed !== state.turnInfo.turnCount) {
+                    const newPos = m.position === 'atk' ? 'def' : 'atk';
+                    moves.push({
+                        type: 'CHANGE_POSITION',
+                        playerId,
+                        zoneIndex: idx,
+                        newPosition: newPos
+                    });
+                }
+            }
+        });
 
         // Set spell/trap (simplified - only sets, no activations from hand for now)
         player.hand.forEach((card, handIdx) => {
@@ -151,6 +178,31 @@ function Sim_getAllMoves(state, playerId) {
                             zoneIndex: zoneIdx,
                             card: card
                         });
+
+                        // NEW: Allow activation of Spells (Normal/Equip)
+                        const isNormal = !card.type.includes('Continuous') && !card.type.includes('Field') && !card.type.includes('Quick-Play');
+                        // Fix: Check race/subType for Equip, not just type string
+                        const isEquip = (card.race === 'Equip' || card.subType === 'Equip');
+
+                        // Check Equip conditions (needs monster)
+                        let canActivate = false;
+                        if (isEquip) {
+                            const hasMonsters = player.field.monsters.some(m => m !== null);
+                            if (hasMonsters) canActivate = true;
+                        } else if (card.category !== 'trap') {
+                            // Only Normal Spells (not Traps) can activate from hand
+                            canActivate = true;
+                        }
+
+                        if (canActivate) {
+                            moves.push({
+                                type: 'ACTIVATE_SPELL',
+                                playerId,
+                                handIndex: handIdx,
+                                zoneIndex: zoneIdx,
+                                card: card
+                            });
+                        }
                     }
                 });
             }
@@ -372,6 +424,18 @@ function Sim_applyMove(state, move) {
             return Engine_setSpellTrap(
                 state, move.playerId, move.handIndex, move.zoneIndex
             );
+
+        case 'ACTIVATE_SPELL':
+            // Simulate activation: Remove from hand, applying generic advantage
+            // Ideally we'd run the effect logic, but for Minimax we can approximate:
+            // - Pot of Greed: +2 cards (simulated by adding dummy cards?)
+            // - Raigeki: Destroy opp monsters
+            // For now, let's just "Place" it ensuring it doesn't crash, 
+            // but effectively treated as handled. 
+            // Ideally we need Engine_activateSpell logic.
+            // Simpler: Just remove from hand and give big score boost in evaluation?
+            // Or better: Implement basic effect simulation for common AI cards.
+            return Engine_simulateSpellActivation(state, move.playerId, move.handIndex, move.card);
 
         case 'ATTACK':
             const opponentId = move.playerId === 'player' ? 'opponent' : 'player';

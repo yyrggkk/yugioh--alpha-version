@@ -618,6 +618,12 @@ function Engine_applyMove(state, move) {
             return Engine_normalSummon(state, move.playerId, move.handIndex, move.zoneIndex, move.position, move.faceUp);
         case 'SET_SPELL':
             return Engine_setSpellTrap(state, move.playerId, move.handIndex, move.zoneIndex);
+        case 'ACTIVATE_SPELL':
+            return Engine_simulateSpellActivation(state, move.playerId, move.handIndex, move.card);
+        case 'TRIBUTE_SUMMON':
+            return Engine_tributeSummon(state, move.playerId, move.handIndex, move.zoneIndex, move.position, move.faceUp, move.tributes);
+        case 'CHANGE_POSITION':
+            return Engine_changePosition(state, move.playerId, move.zoneIndex, move.newPosition);
         case 'ATTACK':
             const opponentId = move.playerId === 'player' ? 'opponent' : 'player';
             return Engine_resolveBattle(state, move.playerId, move.attackerZone, opponentId, move.targetZone);
@@ -664,6 +670,96 @@ function Engine_evaluateState(state, forPlayer) {
     score += (playerCards - oppCards) * 100;
 
     return score;
+}
+
+/**
+ * Simulate Spell Activation for AI Minimax
+ * (Simplified effects)
+ */
+function Engine_simulateSpellActivation(state, playerId, handIndex, card) {
+    const player = state.getPlayer(playerId);
+    const opponent = state.getOpponent(playerId);
+
+    // Remove from hand
+    player.hand.splice(handIndex, 1);
+
+    // Apply Effects
+    const name = card.name;
+
+    if (name === 'Pot of Greed') {
+        // Draw 2
+        // We can't draw real cards in sim, but we can incr generic card count
+        // Or if we have deck knowledge?
+        // Simpler: Just add dummy objects
+        player.hand.push({ name: 'Unknown', category: 'spell' });
+        player.hand.push({ name: 'Unknown', category: 'spell' });
+    }
+    else if (name === 'Raigeki') {
+        // Destroy all opp monsters
+        opponent.field.monsters = [null, null, null];
+    }
+    else if (name === 'Dark Hole') {
+        player.field.monsters = [null, null, null];
+        opponent.field.monsters = [null, null, null];
+    }
+    else if (name === 'Ookazi') {
+        opponent.lp -= 800;
+    }
+    else if (name === 'Dian Keto the Cure Master') {
+        player.lp += 1000;
+    }
+    else if (name === 'Hinotama') {
+        opponent.lp -= 500;
+    }
+    else if (name === 'Monster Reborn') {
+        // Find best monster in either GY (Simulate simply by adding a strong monster)
+        // Check if monster zones full
+        const emptySlot = player.field.monsters.findIndex(m => m === null);
+        if (emptySlot !== -1) {
+            player.field.monsters[emptySlot] = { atk: 2500, def: 2000, faceUp: true, name: 'Revived Monster' };
+        }
+    }
+    else if (name === 'Mystical Space Typhoon') {
+        // Destroy 1 S/T
+        const oppST = opponent.field.spells.findIndex(s => s !== null);
+        if (oppST !== -1) {
+            opponent.field.spells[oppST] = null;
+        }
+    }
+    // Simple Equip Simulation & Stat Buffs
+    // Check Equip OR Buffs (including Quick-Play stats like Rush Recklessly)
+    else if ((card.type && card.type.includes('Equip')) || card.race === 'Equip' || card.subType === 'Equip' ||
+        ['Rush Recklessly', 'Reinforcements'].includes(name)) {
+        // Find best monster
+        const bestMonster = player.field.monsters.reduce((prev, curr) => {
+            if (!curr) return prev;
+            if (!prev) return curr;
+            return (curr.atk > prev.atk) ? curr : prev;
+        }, null);
+
+        if (bestMonster) {
+            // Apply generic buff (e.g. 500-1000)
+            let buff = 500;
+            if (name === 'Axe of Despair') buff = 1000;
+            else if (name === 'Malevolent Nuzzler' || name === 'Rush Recklessly') buff = 700;
+            else if (name === 'Reinforcements') buff = 500;
+
+            bestMonster.atk = (parseInt(bestMonster.atk) || 0) + buff;
+        }
+    }
+    // Continuous Spells (Simulation)
+    else if (name === 'Banner of Courage') {
+        // Mock effect: +200 to all my monsters (Simulates value)
+        player.field.monsters.forEach(m => {
+            if (m) m.atk = (parseInt(m.atk) || 0) + 200;
+        });
+    }
+    else if (name === 'Burning Land') {
+        // Mock effect: Inflict 500 damage (Value of activating it)
+        opponent.lp -= 500;
+    }
+
+    return state;
 }
 
 // Export for Node.js (if needed for testing)
